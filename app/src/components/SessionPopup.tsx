@@ -103,6 +103,7 @@ export function SessionPopup({
   return (
     <div
       className="popup-backdrop"
+      style={{ zIndex: 250 }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
