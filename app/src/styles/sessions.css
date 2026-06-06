@@ -1,0 +1,339 @@
+/* ─────── day strip ─────── */
+.day-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.day-chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem 0.4rem 0.6rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  position: relative;
+}
+.day-chip:hover {
+  border-color: var(--border-strong);
+}
+.day-chip.active {
+  background: var(--text);
+  border-color: var(--text);
+  color: #fff;
+}
+.day-chip.today:not(.active) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.day-chip .dc-name {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+}
+.day-chip.active .dc-name {
+  color: rgba(255, 255, 255, 0.6);
+}
+.day-chip .dc-num {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1;
+  margin-top: 0.25rem;
+  letter-spacing: -0.02em;
+}
+.day-chip .dc-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 999px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+}
+.day-chip .dc-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.day-chip.active .dc-bar {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ─────── sessions list ─────── */
+.sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 220px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.7rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.sessions::-webkit-scrollbar {
+  width: 6px;
+}
+.sessions::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+.sessions::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+.sessions::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
+.sessions .empty {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+}
+
+/* ─────── session card ─────── */
+.session {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.65rem 0.9rem;
+  transition: all 0.2s;
+  position: relative;
+  animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.session:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.session.done {
+  background: var(--bg);
+  border-color: var(--border);
+}
+.session.done .s-title {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.s-color {
+  width: 4px;
+  height: 32px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.s-check {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  transition: all 0.2s;
+  font-size: 0;
+}
+.s-check:hover {
+  border-color: var(--accent);
+}
+.s-check.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.s-check.checked::after {
+  content: '✓';
+  font-size: 12px;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+}
+.s-body {
+  flex: 1;
+  min-width: 0;
+}
+.s-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.s-title .s-topic {
+  font-weight: 400;
+  color: var(--text-3);
+  margin-left: 0.3rem;
+}
+.s-meta {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-3);
+  flex-wrap: wrap;
+}
+.s-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.s-del {
+  background: none;
+  border: none;
+  color: var(--text-4);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.s-del:hover {
+  background: #fef2f0;
+  color: var(--accent);
+}
+
+/* ─────── empty state ─────── */
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.empty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.8rem;
+  font-size: 1.2rem;
+}
+.empty h3 {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.2rem;
+}
+.empty p {
+  color: var(--text-3);
+  font-size: 0.82rem;
+}
+
+/* ─────── add form ─────── */
+.add-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.add-form-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+.field label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.field input,
+.field select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+  height: 38px;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--text);
+  background: var(--surface);
+}
+.field input::placeholder {
+  color: var(--text-4);
+  font-weight: 400;
+}
+.field-subject {
+  flex: 1.2;
+  min-width: 130px;
+}
+.field-topic {
+  flex: 1.5;
+  min-width: 140px;
+}
+.field-time {
+  flex: 0 0 120px;
+}
+.field-dur {
+  flex: 0 0 100px;
+}
+.submit-cell {
+  display: flex;
+  align-items: flex-end;
+}
+.submit-btn {
+  height: 38px;
+  padding: 0 1.2rem;
+  background: var(--text);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s,
+    transform 0.15s;
+  letter-spacing: -0.005em;
+}
+.submit-btn:hover {
+  background: #2a2622;
+}
+.submit-btn:active {
+  transform: scale(0.97);
+}

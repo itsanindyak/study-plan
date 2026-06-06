@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "study-plan",
+  "main": "src/index.js",
+  "compatibility_date": "2026-01-01",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "null,https://study-qsk.pages.dev,https://study.anindya.online,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "STUDY_KV",
+      "id": "22c2da5f29d84046996e3b5e5f8cde1f"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+/* ─────── design tokens ─────── */
+:root {
+  --bg: #f7f5f0;
+  --surface: #ffffff;
+  --surface-2: #fbfaf6;
+  --border: #ece9e1;
+  --border-strong: #d9d4c8;
+  --text: #181715;
+  --text-2: #4a4742;
+  --text-3: #8a857c;
+  --text-4: #b8b3a8;
+  --accent: #ff5a3c;
+  --accent-soft: #fff0eb;
+  --green: #10b981;
+  --green-soft: #ecfdf5;
+  --shadow-sm: 0 1px 2px rgba(20, 16, 8, 0.04);
+  --shadow-md: 0 4px 16px -2px rgba(20, 16, 8, 0.06), 0 2px 4px -1px rgba(20, 16, 8, 0.04);
+  --shadow-lg: 0 12px 32px -8px rgba(20, 16, 8, 0.10), 0 4px 8px -2px rgba(20, 16, 8, 0.04);
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --hour-h: 60px;
+}
+
+/* ─────── reset + typography ─────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html {
+  font-size: 15px;
+}
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01';
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(255, 90, 60, 0.05), transparent 40%),
+    radial-gradient(circle at 85% 100%, rgba(255, 90, 60, 0.03), transparent 40%);
+}

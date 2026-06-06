@@ -1,0 +1,15 @@
+{
+  "name": "study-plan-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker backend for the Study Plan app. Stores sessions + deadlines in KV, auth via bearer token.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

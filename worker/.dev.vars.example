@@ -1,0 +1,5 @@
+# Local secrets for `wrangler dev`. Do NOT commit this file.
+# Format: KEY=value (one per line). Values here are loaded into env at dev time only.
+# For production, use `wrangler secret put SECRET_TOKEN`.
+#
+# SECRET_TOKEN=pick-a-long-random-string-here

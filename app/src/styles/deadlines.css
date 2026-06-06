@@ -1,0 +1,175 @@
+/* ─────── deadlines section ─────── */
+.deadlines {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+.deadlines-head {
+  padding: 0.9rem 1.1rem 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.deadlines-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.deadlines-title h2 {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.025em;
+  position: relative;
+  padding-bottom: 0.35rem;
+}
+.deadlines-title h2::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--text);
+  border-radius: 2px;
+}
+.deadlines-title .dt-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-3);
+  background: var(--bg);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+.deadlines-list {
+  padding: 0.4rem 1.1rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* ─────── deadline card ─────── */
+.dl {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+.dl:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.dl.done {
+  opacity: 0.55;
+}
+.dl.done .dl-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.dl.overdue:not(.done) {
+  border-color: #f4c7c2;
+  background: #fff5f3;
+}
+.dl .dl-check {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  transition: all 0.2s;
+  font-size: 0;
+}
+.dl .dl-check:hover {
+  border-color: var(--accent);
+}
+.dl .dl-check.checked {
+  background: var(--green);
+  border-color: var(--green);
+}
+.dl .dl-check.checked::after {
+  content: '✓';
+  font-size: 12px;
+  color: #fff;
+  font-weight: 700;
+}
+.dl .dl-body {
+  flex: 1;
+  min-width: 0;
+}
+.dl .dl-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.dl .dl-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-3);
+  flex-wrap: wrap;
+}
+.dl .dl-meta .due {
+  font-weight: 500;
+}
+.dl .dl-meta .overdue-tag {
+  color: #c1372b;
+  font-weight: 600;
+}
+.dl .dl-del {
+  background: none;
+  border: none;
+  color: var(--text-4);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.dl .dl-del:hover {
+  background: #fef2f0;
+  color: var(--accent);
+}
+
+/* ─────── deadline form ─────── */
+.deadline-form {
+  padding: 0.4rem 1.1rem 1rem;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.deadline-form .field {
+  flex: 1;
+  min-width: 100px;
+}
+.deadline-form .field-date {
+  flex: 0 0 140px;
+}
+
+.deadlines-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.8rem;
+}
