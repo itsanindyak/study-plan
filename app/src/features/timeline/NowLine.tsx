@@ -1,24 +1,38 @@
 import { useEffect, useState } from 'react';
-import { isToday } from '@/lib/date';
+import { dateKey } from '@/lib/date';
 
 const TL_START = 6;
-const TL_END = 24;
+const TL_END = 30;
 const HOUR_H_FALLBACK = 56;
 
 export function NowLine({ date }: { date: string }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    if (!isToday(new Date(date + 'T00:00:00'))) return;
+    const timelineDate = new Date();
+    if (timelineDate.getHours() < 6) {
+      timelineDate.setDate(timelineDate.getDate() - 1);
+    }
+    if (date !== dateKey(timelineDate)) return;
+
     const tick = () => setNow(new Date());
     const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
   }, [date]);
 
-  const selDate = new Date(date + 'T00:00:00');
-  if (!isToday(selDate)) return null;
+  const timelineDate = new Date(now);
+  if (timelineDate.getHours() < 6) {
+    timelineDate.setDate(timelineDate.getDate() - 1);
+  }
+  const timelineDateKey = dateKey(timelineDate);
 
-  const nowM = now.getHours() * 60 + now.getMinutes();
+  if (date !== timelineDateKey) return null;
+
+  let nowM = now.getHours() * 60 + now.getMinutes();
+  if (now.getHours() < 6) {
+    nowM += 24 * 60;
+  }
+
   if (nowM < TL_START * 60 || nowM >= TL_END * 60) return null;
 
   const hourH =

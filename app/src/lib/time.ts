@@ -12,8 +12,9 @@ export function minToTime(m: number): string {
 
 export function fmtTime12(t: string): string {
   const [h, m] = t.split(':').map(Number);
-  const am = h < 12;
-  const hh = h % 12 === 0 ? 12 : h % 12;
+  const normH = h % 24;
+  const am = normH < 12;
+  const hh = normH % 12 === 0 ? 12 : normH % 12;
   return `${hh}:${String(m).padStart(2, '0')} ${am ? 'am' : 'pm'}`;
 }
 

@@ -39,6 +39,19 @@ export function App() {
 
   const daySessions = useSessionStore((s) => s.sessions[selectedKey]) ?? [];
 
+  const { totalMin, completedMin } = useMemo(() => {
+    let tMin = 0;
+    let cMin = 0;
+    for (const s of daySessions) {
+      const d = parseInt(String(s.duration)) || 0;
+      tMin += d;
+      if (s.done) {
+        cMin += d;
+      }
+    }
+    return { totalMin: tMin, completedMin: cMin };
+  }, [daySessions]);
+
   const goPrevWeek = () => {
     setWeekOffset((w) => w - 1);
     setSelectedDayIndex(0);
@@ -57,7 +70,7 @@ export function App() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      <BentoStats weekStart={weekStart} />
+      <BentoStats weekStart={weekStart} selectedKey={selectedKey} />
 
       <DayStrip
         weekStart={weekStart}
@@ -98,6 +111,9 @@ export function App() {
               <span className="th-count">
                 <strong>{daySessions.filter((s) => s.done).length}</strong>/
                 <span>{daySessions.length}</span> done
+                <span style={{ opacity: 0.35, margin: '0 6px' }}>·</span>
+                <strong>{(completedMin / 60).toFixed(1)}</strong>/
+                <span>{(totalMin / 60).toFixed(1)}</span> hrs
               </span>
             </div>
             <Timeline
