@@ -69,7 +69,7 @@ export function useSyncPill(): PillSnapshot {
 }
 
 // ─────── boot / focus refresh ───────
-async function pullFromCloud() {
+export async function pullFromCloud() {
   const cfg = {
     token: useSettingsStore.getState().token,
     workerUrl: useSettingsStore.getState().workerUrl,
@@ -261,23 +261,12 @@ export function useCloudSync() {
       if (dirtyDeadlines.size) scheduleSync();
     });
 
-    // focus refresh
-    const onVis = () => {
-      if (document.visibilityState === 'visible') {
-        void pullFromCloud();
-      }
-    };
-    document.addEventListener('visibilitychange', onVis);
-    window.addEventListener('focus', onVis);
-
     // pill auto-refresh every 5s for "ago" labels
     const pillTick = setInterval(refreshPill, 5000);
 
     return () => {
       unsubSessions();
       unsubDeadlines();
-      document.removeEventListener('visibilitychange', onVis);
-      window.removeEventListener('focus', onVis);
       clearInterval(pillTick);
       if (syncTimer) {
         clearTimeout(syncTimer);

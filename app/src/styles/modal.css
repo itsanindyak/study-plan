@@ -236,6 +236,63 @@
   }
 }
 
+/* ─────── cloud sync reload button ─────── */
+.sync-reload-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    transform 0.1s;
+  box-shadow: var(--shadow-sm);
+  outline: none;
+  flex-shrink: 0;
+}
+.sync-reload-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.sync-reload-btn:active {
+  transform: scale(0.92);
+}
+.sync-reload-btn.is-syncing .reload-icon {
+  animation: syncReloadSpin 1s linear infinite;
+}
+.sync-reload-btn[data-state='synced'] {
+  color: #1a7a4a;
+  border-color: #cfe6d8;
+  background: #f0f9f4;
+}
+.sync-reload-btn[data-state='syncing'] {
+  color: #8a6a2a;
+  border-color: #f1debf;
+  background: #fdf6e3;
+}
+.sync-reload-btn[data-state='error'] {
+  color: var(--accent);
+  border-color: #f5cdc1;
+  background: #fdf1ed;
+}
+
+@keyframes syncReloadSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ─────── icon button ─────── */
 .icon-btn {
   width: 36px;
