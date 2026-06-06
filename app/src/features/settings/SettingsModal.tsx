@@ -37,7 +37,10 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     const saved = cfg().token;
     setToken(draft);
     try {
-      await kvClient.ping(cfg());
+      const res = await kvClient.ping(cfg());
+      if (!res || !res.ok) {
+        throw new Error('invalid response from server (is the Worker URL correct?)');
+      }
       setStatus({ kind: 'ok', text: 'connection works ✓' });
     } catch (err) {
       setStatus({ kind: 'err', text: 'failed: ' + (err as Error).message });
