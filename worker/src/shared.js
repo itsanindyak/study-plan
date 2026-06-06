@@ -18,7 +18,7 @@ export function allowedOrigins(env) {
 export function corsHeadersFor(request, env) {
   const origin = request.headers.get("Origin");
   const set = allowedOrigins(env);
-  const allowOrigin = origin && set.has(origin) ? origin : "";
+  const allowOrigin = origin && (set.has("*") || set.has(origin)) ? origin : "";
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     Vary: "Origin",
@@ -33,7 +33,8 @@ export function originAllowed(request, env) {
   // The bearer token is the real security boundary for those.
   const origin = request.headers.get("Origin");
   if (!origin) return true;
-  return allowedOrigins(env).has(origin);
+  const set = allowedOrigins(env);
+  return set.has("*") || set.has(origin);
 }
 
 // ─── auth ─────────────────────────────────────────────────────
