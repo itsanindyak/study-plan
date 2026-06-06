@@ -385,13 +385,18 @@
   .day-chip .dc-name {
     font-size: 0.55rem;
   }
-  .field-time,
+  .field-time {
+    flex: 1 1 100%;
+    min-width: 180px;
+    margin-right: 0;
+  }
   .field-dur {
-    flex: 1;
-    min-width: 90px;
+    flex: 1 1 100%;
+    min-width: 140px;
   }
   .submit-cell {
-    flex: 0 0 auto;
+    flex: 1 1 100%;
+    margin-left: 0;
   }
   .submit-btn {
     width: 100%;

@@ -253,7 +253,7 @@
 }
 .add-form-row {
   display: flex;
-  gap: 0.5rem;
+  gap: 1rem;
   flex-wrap: wrap;
   align-items: flex-end;
 }
@@ -305,14 +305,16 @@
   min-width: 140px;
 }
 .field-time {
-  flex: 0 0 120px;
+  flex: 0 0 180px;
+  margin-right: 1.5rem;
 }
 .field-dur {
-  flex: 0 0 100px;
+  flex: 0 0 140px;
 }
 .submit-cell {
   display: flex;
   align-items: flex-end;
+  margin-left: auto;
 }
 .submit-btn {
   height: 38px;
@@ -337,3 +339,47 @@
 .submit-btn:active {
   transform: scale(0.97);
 }
+
+/* ─────── select and input groups in add form ─────── */
+.time-select-group,
+.dur-select-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.time-select-group .time-select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.2rem;
+  text-align: center;
+  text-align-last: center;
+}
+
+.time-select-group .period-select {
+  flex: 1.2;
+}
+
+.time-separator {
+  color: var(--text-3);
+  font-weight: 700;
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.dur-select-group .dur-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.4rem;
+  text-align: center;
+}
+
+.dur-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-3);
+  user-select: none;
+  margin-right: 0.2rem;
+}
+

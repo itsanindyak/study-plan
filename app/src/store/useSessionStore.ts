@@ -18,6 +18,11 @@ interface SessionState {
   ) => Session;
   toggleDone: (date: DateKey, id: string) => void;
   remove: (date: DateKey, id: string) => void;
+  update: (
+    date: DateKey,
+    id: string,
+    input: { subject: string; topic: string; time: string; duration: number },
+  ) => void;
   replaceForDate: (date: DateKey, list: Session[]) => void;
 
   // cloud hydration
@@ -64,6 +69,31 @@ export const useSessionStore = create<SessionState>()(
               ...s.sessions,
               [date]: list.map((x) =>
                 x.id === id ? { ...x, done: !x.done, updatedAt: Date.now() } : x,
+              ),
+            },
+          };
+        }),
+
+      update: (date, id, input) =>
+        set((s) => {
+          const list = s.sessions[date];
+          if (!list) return s;
+          const color = colorPicker.get(input.subject);
+          return {
+            sessions: {
+              ...s.sessions,
+              [date]: list.map((x) =>
+                x.id === id
+                  ? {
+                      ...x,
+                      subject: input.subject,
+                      topic: input.topic,
+                      time: input.time,
+                      duration: input.duration,
+                      color,
+                      updatedAt: Date.now(),
+                    }
+                  : x,
               ),
             },
           };

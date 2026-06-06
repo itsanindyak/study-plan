@@ -439,3 +439,68 @@
 .settings-disconnect:hover {
   color: var(--accent);
 }
+
+/* ─────── editing state in popup ─────── */
+.popup-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.6rem;
+}
+.popup-edit-field label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.popup-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: border-color 0.2s, background 0.2s;
+  height: 34px;
+  box-sizing: border-box;
+}
+.popup-input:focus {
+  outline: none;
+  border-color: var(--text);
+  background: var(--surface);
+}
+
+.popup-row.edit-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.6rem 0;
+}
+
+.popup-actions .pa-edit {
+  background: var(--bg);
+  color: var(--text-2);
+}
+.popup-actions .pa-edit:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.popup-actions .pa-save {
+  background: var(--text);
+  color: #fff;
+}
+.popup-actions .pa-save:hover {
+  background: #2a2622;
+}
+.popup-actions .pa-cancel {
+  background: var(--bg);
+  color: var(--text-3);
+}
+.popup-actions .pa-cancel:hover {
+  background: var(--border);
+}
+
