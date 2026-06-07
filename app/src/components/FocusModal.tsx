@@ -1,8 +1,54 @@
+import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { todayKey } from '@/lib/date';
 import { HeaderLeft } from './HeaderLeft';
 import type { Session } from '@/types';
+
+function FocusBackground() {
+  const orbs = useMemo(
+    () => [
+      { size: 350, x: '15%', y: '20%', delay: 0, duration: 8, color: 'rgba(255, 220, 180, 0.4)' },
+      { size: 280, x: '75%', y: '15%', delay: 1, duration: 10, color: 'rgba(255, 200, 150, 0.35)' },
+      { size: 250, x: '80%', y: '75%', delay: 2, duration: 9, color: 'rgba(255, 240, 200, 0.3)' },
+      { size: 320, x: '20%', y: '80%', delay: 0.5, duration: 11, color: 'rgba(255, 180, 120, 0.4)' },
+      { size: 200, x: '50%', y: '50%', delay: 1.5, duration: 7, color: 'rgba(255, 255, 230, 0.25)' },
+    ],
+    [],
+  );
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+      {orbs.map((orb, i) => (
+        <motion.div
+          key={i}
+          style={{
+            position: 'absolute',
+            left: `calc(${orb.x} - ${orb.size / 2}px)`,
+            top: `calc(${orb.y} - ${orb.size / 2}px)`,
+            width: orb.size,
+            height: orb.size,
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${orb.color}, transparent 70%)`,
+            filter: 'blur(60px)',
+          }}
+          animate={{
+            x: [0, 40, -30, 20, 0],
+            y: [0, -35, 25, -15, 0],
+            scale: [1, 1.2, 0.85, 1.15, 1],
+          }}
+          transition={{
+            duration: orb.duration,
+            delay: orb.delay,
+            repeat: Infinity,
+            repeatType: 'mirror',
+            ease: 'easeInOut',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function fmtDuration(secs: number) {
   if (secs < 60) return `${secs} sec`;
@@ -164,7 +210,16 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
   const timerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
   return (
-    <div className="focus-backdrop" role="dialog" aria-modal="true">
+    <motion.div
+      className="focus-backdrop"
+      role="dialog"
+      aria-modal="true"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <FocusBackground />
       <header className="focus-header">
         <HeaderLeft
           actionLabel="Exit focus"
@@ -253,14 +308,23 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
       </main>
 
       <FocusClock />
-    </div>
+    </motion.div>
   );
 }
 
 // ─────── empty state ───────
 function EmptyState({ onClose, onBack }: { onClose: () => void; onBack: () => void }) {
   return (
-    <div className="focus-backdrop" role="dialog" aria-modal="true">
+    <motion.div
+      className="focus-backdrop"
+      role="dialog"
+      aria-modal="true"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <FocusBackground />
       <header className="focus-header">
         <HeaderLeft
           actionLabel="Exit focus"
@@ -300,7 +364,7 @@ function EmptyState({ onClose, onBack }: { onClose: () => void; onBack: () => vo
       </main>
 
       <FocusClock />
-    </div>
+    </motion.div>
   );
 }
 
@@ -360,7 +424,16 @@ function Celebration({
   );
 
   return (
-    <div className="focus-backdrop" role="dialog" aria-modal="true">
+    <motion.div
+      className="focus-backdrop"
+      role="dialog"
+      aria-modal="true"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <FocusBackground />
       <header className="focus-header">
         <HeaderLeft
           actionLabel="Exit focus"
@@ -449,6 +522,6 @@ function Celebration({
           </div>
         </div>
       </main>
-    </div>
+    </motion.div>
   );
 }

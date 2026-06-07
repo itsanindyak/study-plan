@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { fmtTime12, minToTime, timeToMin, fmtDuration } from '@/lib/time';
@@ -101,14 +102,25 @@ export function SessionPopup({
   };
 
   return (
-    <div
+    <motion.div
       className="popup-backdrop"
       style={{ zIndex: 250 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="popup" role="dialog" aria-modal="true">
+      <motion.div
+        className="popup"
+        role="dialog"
+        aria-modal="true"
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+      >
         <div className="popup-head">
           <div
             className="popup-swatch"
@@ -245,7 +257,7 @@ export function SessionPopup({
             </div>
           </>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

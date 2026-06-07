@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { useSettingsStore, selectIsConfigured } from '@/store/useSettingsStore';
 import { kvClient } from '../sync/kvClient';
@@ -79,74 +80,90 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   };
 
   return (
-    <div
-      className="popup-backdrop"
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="popup" role="dialog" aria-modal="true" style={{ maxWidth: 380 }}>
-        <div className="popup-head">
-          <div
-            className="popup-swatch"
-            style={{ background: 'linear-gradient(135deg, #5b8def, #2b5fc7)' }}
-          />
-          <div className="popup-title">
-            <h3>cloud sync</h3>
-            <div className="pt-sub">access your plan on every device</div>
-          </div>
-          <button className="popup-close" onClick={onClose} aria-label="close">
-            ✕
-          </button>
-        </div>
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="popup-backdrop"
+          role="presentation"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <motion.div
+            className="popup"
+            role="dialog"
+            aria-modal="true"
+            style={{ maxWidth: 380 }}
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          >
+            <div className="popup-head">
+              <div
+                className="popup-swatch"
+                style={{ background: 'linear-gradient(135deg, #5b8def, #2b5fc7)' }}
+              />
+              <div className="popup-title">
+                <h3>cloud sync</h3>
+                <div className="pt-sub">access your plan on every device</div>
+              </div>
+              <button className="popup-close" onClick={onClose} aria-label="close">
+                ✕
+              </button>
+            </div>
 
-        <div className="settings-body">
-          <p className="settings-intro">
-            paste your access token to link this device to your plan. the token stays in this
-            browser and is only sent as a request header to the worker.
-          </p>
+            <div className="settings-body">
+              <p className="settings-intro">
+                paste your access token to link this device to your plan. the token stays in this
+                browser and is only sent as a request header to the worker.
+              </p>
 
-          <label className="settings-label">
-            <span>access token</span>
-            <input
-              type="password"
-              value={draft}
-              placeholder="paste your token"
-              autoComplete="new-password"
-              spellCheck={false}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-          </label>
+              <label className="settings-label">
+                <span>access token</span>
+                <input
+                  type="password"
+                  value={draft}
+                  placeholder="paste your token"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              </label>
 
-          <div className={`settings-status ${status.kind === 'ok' ? 'ok' : status.kind === 'err' ? 'err' : ''}`}>
-            {status.text}
-          </div>
+              <div className={`settings-status ${status.kind === 'ok' ? 'ok' : status.kind === 'err' ? 'err' : ''}`}>
+                {status.text}
+              </div>
 
-          <div className="settings-actions">
-            <button
-              className="settings-btn settings-btn-ghost"
-              onClick={test}
-              disabled={busy}
-            >
-              test
-            </button>
-            <button
-              className="settings-btn settings-btn-primary"
-              onClick={connect}
-              disabled={busy}
-            >
-              connect
-            </button>
-          </div>
+              <div className="settings-actions">
+                <button
+                  className="settings-btn settings-btn-ghost"
+                  onClick={test}
+                  disabled={busy}
+                >
+                  test
+                </button>
+                <button
+                  className="settings-btn settings-btn-primary"
+                  onClick={connect}
+                  disabled={busy}
+                >
+                  connect
+                </button>
+              </div>
 
-          {configured && (
-            <button className="settings-disconnect" onClick={disconnect}>
-              disable cloud sync
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+              {configured && (
+                <button className="settings-disconnect" onClick={disconnect}>
+                  disable cloud sync
+                </button>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

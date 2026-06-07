@@ -1,3 +1,4 @@
+import { AnimatePresence } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { Topbar } from '@/components/Topbar';
 import { BentoStats } from '@/components/BentoStats';
@@ -33,6 +34,17 @@ export function App() {
   useEffect(() => {
     useDeadlineStore.getState().cleanup();
   }, []);
+
+  // lock body scroll while focus mode is open so the page Y scrollbar
+  // doesn't show through the fullscreen backdrop
+  useEffect(() => {
+    if (!focusOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [focusOpen]);
 
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset]);
   const selectedDate = useMemo(() => addDays(weekStart, selectedDayIndex), [
@@ -162,13 +174,16 @@ export function App() {
 
       <div className="footer">local-first · syncs to cloud when connected</div>
 
-      {openSession && (
-        <SessionPopup
-          date={openSession.date}
-          session={openSession.session}
-          onClose={() => setOpenSession(null)}
-        />
-      )}
+      <AnimatePresence>
+        {openSession && (
+          <SessionPopup
+            key="session-popup"
+            date={openSession.date}
+            session={openSession.session}
+            onClose={() => setOpenSession(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
@@ -179,9 +194,11 @@ export function App() {
         onOpenSession={(dateKey, session) => setOpenSession({ date: dateKey, session })}
       />
 
-      {focusOpen && (
-        <FocusModal onClose={() => setFocusOpen(false)} />
-      )}
+      <AnimatePresence>
+        {focusOpen && (
+          <FocusModal key="focus-modal" onClose={() => setFocusOpen(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
