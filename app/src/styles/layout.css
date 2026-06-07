@@ -50,6 +50,62 @@
   color: var(--accent);
 }
 
+.focus-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.focus-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(255, 90, 60, 0.2);
+  transform: translateY(-1px);
+}
+.focus-btn:active {
+  transform: translateY(0);
+}
+
+/* ─────── shared header-left (brand + adjacent action) ─────── */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.header-action:hover {
+  box-shadow: 0 4px 12px rgba(255, 90, 60, 0.22);
+  transform: translateY(-1px);
+}
+.header-action:active {
+  transform: translateY(0);
+}
+
+
 .topbar-right {
   display: flex;
   align-items: center;
@@ -58,6 +114,7 @@
 .week-nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -92,6 +149,7 @@
   min-width: 130px;
   text-align: center;
   letter-spacing: -0.005em;
+  flex: 1;
 }
 
 /* ─────── bento stats ─────── */
@@ -111,6 +169,9 @@
   transition:
     transform 0.2s,
     box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  height: 130px;
 }
 .bento-card:hover {
   transform: translateY(-2px);
@@ -178,7 +239,7 @@
   color: #fff;
 }
 .bento-progress {
-  margin-top: 0.6rem;
+  margin-top: auto;
   height: 4px;
   background: var(--bg);
   border-radius: 999px;
@@ -221,7 +282,7 @@
   gap: 0.3rem;
 }
 .digital-clock {
-  margin-top: 0.4rem;
+  margin-top: auto;
   padding: 0.7rem 0.8rem;
   background: #ffffff;
   border: 1px solid var(--border);
@@ -364,6 +425,9 @@
   .bento {
     grid-template-columns: repeat(2, 1fr);
   }
+  .bento-card:nth-child(3) {
+    grid-column: span 2;
+  }
   :root {
     --hour-h: 60px;
   }
@@ -372,7 +436,32 @@
     min-height: 180px;
   }
 }
+@media (max-width: 768px) {
+  .bento {
+    grid-template-columns: 1fr;
+  }
+  .bento-card:nth-child(3) {
+    grid-column: span 1;
+  }
+}
 @media (max-width: 520px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .topbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .week-nav {
+    flex: 1;
+    min-width: 0;
+  }
+  .week-label {
+    font-size: 0.7rem;
+    min-width: 0;
+    padding: 0 0.4rem;
+  }
   .day-strip {
     gap: 0.3rem;
   }

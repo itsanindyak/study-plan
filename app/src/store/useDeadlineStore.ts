@@ -40,7 +40,11 @@ export const useDeadlineStore = create<DeadlineState>()(
 
       toggle: (id) =>
         set((s) => ({
-          deadlines: s.deadlines.map((d) => (d.id === id ? { ...d, done: !d.done } : d)),
+          deadlines: s.deadlines.map((d) =>
+            d.id === id
+              ? { ...d, done: !d.done, completedAt: !d.done ? Date.now() : undefined }
+              : d,
+          ),
         })),
 
       remove: (id) => set((s) => ({ deadlines: s.deadlines.filter((d) => d.id !== id) })),

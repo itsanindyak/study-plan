@@ -20,6 +20,7 @@ export interface Deadline {
   source: 'manual' | string;
   done: boolean;
   createdAt: number; // ms epoch
+  completedAt?: number; // ms epoch, set when done toggled true
 }
 
 export type SyncState = 'offline' | 'syncing' | 'synced' | 'error';

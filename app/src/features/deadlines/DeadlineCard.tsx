@@ -1,8 +1,18 @@
 import { useDeadlineStore, daysUntil } from '@/store/useDeadlineStore';
 import type { Deadline } from '@/types';
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function fmtDateShort(ts: number): string {
+  const d = new Date(ts);
+  return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
+
 function formatDue(d: Deadline): { html: string; overdue: boolean } {
-  if (d.done) return { html: '<span class="due">completed</span>', overdue: false };
+  if (d.done) {
+    const at = d.completedAt ?? Date.now();
+    return { html: `<span class="due done-on">done on ${fmtDateShort(at)}</span>`, overdue: false };
+  }
   const days = daysUntil(d.dueDate);
   if (days < 0) {
     const over = Math.abs(days);

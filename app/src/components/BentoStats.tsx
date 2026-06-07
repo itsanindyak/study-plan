@@ -68,6 +68,9 @@ export function BentoStats({ weekStart, selectedKey }: { weekStart: Date; select
         <div className="bento-progress">
           <div className="bento-progress-fill" style={{ width: `${pct}%` }} />
         </div>
+        <div className="bento-foot" style={{ color: 'rgba(255, 255, 255, 0.65)', marginTop: '0.4rem', position: 'relative', zIndex: 1 }}>
+          {stats.doneCount} of {stats.totalCount} sessions finished
+        </div>
       </div>
 
       <Clock />

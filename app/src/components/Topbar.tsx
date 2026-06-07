@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Brand } from './Brand';
+import { HeaderLeft } from './HeaderLeft';
 import { SyncPill } from './SyncPill';
 import { WeekNav } from './WeekNav';
 import { IconButton } from './IconButton';
@@ -10,11 +10,13 @@ export function Topbar({
   onPrevWeek,
   onNextWeek,
   onOpenSettings,
+  onOpenFocus,
 }: {
   weekStart: Date;
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onOpenSettings: () => void;
+  onOpenFocus: () => void;
 }) {
   const weekLabel = useMemo(() => {
     const weekEnd = addDays(weekStart, 6);
@@ -26,7 +28,12 @@ export function Topbar({
 
   return (
     <div className="topbar">
-      <Brand />
+      <HeaderLeft
+        actionLabel="focus"
+        actionIcon={<span>⚡</span>}
+        onAction={onOpenFocus}
+        actionTitle="Start Focus Mode"
+      />
       <div className="topbar-right">
         <SyncPill onClick={onOpenSettings} />
         <WeekNav

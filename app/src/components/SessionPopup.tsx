@@ -97,7 +97,7 @@ export function SessionPopup({
       time: time24,
       duration: totalDuration,
     });
-    setIsEditing(false);
+    onClose();
   };
 
   return (

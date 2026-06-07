@@ -122,6 +122,13 @@
 .session.done {
   background: var(--bg);
   border-color: var(--border);
+  opacity: 0.55;
+}
+.session.done .s-color {
+  opacity: 0.35;
+}
+.session.done .s-meta {
+  opacity: 0.55;
 }
 .session.done .s-title {
   color: var(--text-3);
@@ -165,6 +172,7 @@
 .s-body {
   flex: 1;
   min-width: 0;
+  cursor: pointer;
 }
 .s-title {
   font-weight: 600;
@@ -381,5 +389,129 @@
   color: var(--text-3);
   user-select: none;
   margin-right: 0.2rem;
+}
+
+/* ─────── deadline banner (pinned in sessions list) ─────── */
+.dl-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: linear-gradient(135deg, var(--accent-soft), rgba(255, 138, 80, 0.18));
+  border: 1px solid rgba(255, 90, 60, 0.32);
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem 0.7rem 0.85rem;
+  position: relative;
+  animation: dlBannerIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dl-banner.urgent {
+  background: linear-gradient(135deg, rgba(255, 90, 60, 0.22), rgba(255, 90, 60, 0.12));
+  border-color: rgba(255, 90, 60, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 90, 60, 0.08);
+}
+@keyframes dlBannerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.dl-banner-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.25rem 0.55rem 0.25rem 0.5rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.dl-banner.urgent .dl-banner-tag {
+  color: #fff;
+  background: var(--accent);
+}
+.dl-banner-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.dl-banner-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.dl-banner-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dl-banner-due {
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: 0.01em;
+}
+.dl-banner.urgent .dl-banner-due {
+  color: var(--accent);
+  font-weight: 600;
+}
+.dl-banner-check {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 90, 60, 0.45);
+  background: #fff;
+  color: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.18s ease;
+}
+.dl-banner-check:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+.dl-banner-check.checked {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.dl-banner.done {
+  opacity: 0.55;
+  background: var(--bg);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.dl-banner.done .dl-banner-tag {
+  background: var(--border);
+  color: var(--text-3);
+}
+.dl-banner.done .dl-banner-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  color: var(--text-3);
+}
+.dl-banner.done .dl-banner-due {
+  color: var(--text-3);
 }
 
