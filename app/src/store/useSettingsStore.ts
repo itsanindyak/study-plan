@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CloudConfig } from '@/types';
 
-const DEFAULT_WORKER_URL = import.meta.env.VITE_API_BASE_URL || '';
+const DEFAULT_WORKER_URL = 'https://study-worker.anindya.online';
 
 interface SettingsState {
   token: string;
