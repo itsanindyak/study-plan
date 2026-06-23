@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CloudConfig } from '@/types';
 
-const DEFAULT_WORKER_URL = 'https://study-plan.iankoley04.workers.dev';
+const DEFAULT_WORKER_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 interface SettingsState {
   token: string;
@@ -19,7 +19,15 @@ export const useSettingsStore = create<SettingsState>()(
       setToken: (token) => set({ token: token.trim() }),
       clear: () => set({ token: '' }),
     }),
-    { name: 'studyplan_config' },
+    {
+      name: 'studyplan_config',
+      partialize: (state) => ({ token: state.token }),
+      merge: (persisted: unknown, current: SettingsState): SettingsState => ({
+        ...current,
+        ...(persisted as Partial<SettingsState>),
+        workerUrl: DEFAULT_WORKER_URL,
+      }),
+    },
   ),
 );
 
