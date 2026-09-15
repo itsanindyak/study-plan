@@ -10,7 +10,6 @@ import { Timeline } from '@/features/timeline/Timeline';
 import { WeeklyScheduleModal } from '@/features/timeline/WeeklyScheduleModal';
 import { SessionPopup } from '@/components/SessionPopup';
 import { SettingsModal } from '@/features/settings/SettingsModal';
-import { FocusModal } from '@/components/FocusModal';
 import { useCloudSync } from '@/features/sync/useCloudSync';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
@@ -27,24 +26,12 @@ export function App() {
   const [openSession, setOpenSession] = useState<{ date: string; session: Session } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [weeklyOpen, setWeeklyOpen] = useState(false);
-  const [focusOpen, setFocusOpen] = useState(false);
 
   // auto-cleanup deadlines on mount (3-days-past purge) so the UI is tidy
   // before the cloud pull potentially replaces them.
   useEffect(() => {
     useDeadlineStore.getState().cleanup();
   }, []);
-
-  // lock body scroll while focus mode is open so the page Y scrollbar
-  // doesn't show through the fullscreen backdrop
-  useEffect(() => {
-    if (!focusOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [focusOpen]);
 
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset]);
   const selectedDate = useMemo(() => addDays(weekStart, selectedDayIndex), [
@@ -61,7 +48,7 @@ export function App() {
     for (const s of daySessions) {
       const d = parseInt(String(s.duration)) || 0;
       tMin += d;
-      if (s.done) {
+      if (s.status === 'done') {
         cMin += d;
       }
     }
@@ -84,7 +71,6 @@ export function App() {
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
         onOpenSettings={() => setSettingsOpen(true)}
-        onOpenFocus={() => setFocusOpen(true)}
       />
 
       <BentoStats weekStart={weekStart} selectedKey={selectedKey} />
@@ -107,7 +93,7 @@ export function App() {
             <span className="count">
               {daySessions.length === 0
                 ? 'no sessions'
-                : `${daySessions.length} session${daySessions.length === 1 ? '' : 's'} · ${daySessions.filter((s) => s.done).length} done`}
+                : `${daySessions.length} session${daySessions.length === 1 ? '' : 's'} · ${daySessions.filter((s) => s.status === 'done').length} done`}
             </span>
           </div>
 
@@ -126,7 +112,7 @@ export function App() {
             <div className="timeline-head">
               <span className="th-label">timeline</span>
               <span className="th-count" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <strong>{daySessions.filter((s) => s.done).length}</strong>/
+                <strong>{daySessions.filter((s) => s.status === 'done').length}</strong>/
                 <span>{daySessions.length}</span> done
                 <span style={{ opacity: 0.35, margin: '0 4px' }}>·</span>
                 <strong>{(completedMin / 60).toFixed(1)}</strong>/
@@ -193,12 +179,6 @@ export function App() {
         onClose={() => setWeeklyOpen(false)}
         onOpenSession={(dateKey, session) => setOpenSession({ date: dateKey, session })}
       />
-
-      <AnimatePresence>
-        {focusOpen && (
-          <FocusModal key="focus-modal" onClose={() => setFocusOpen(false)} />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

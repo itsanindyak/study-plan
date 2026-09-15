@@ -9,6 +9,7 @@ import {
   json,
   errResponse,
   sanitizeSession,
+  normalizeRecord,
 } from "./shared.js";
 
 // GET /api/sessions  →  { dates: [YYYY-MM-DD...] }
@@ -33,7 +34,7 @@ export async function getAllSessions(env, cors) {
   keys.forEach((k, i) => {
     const date = dateFromSessionKey(k.name);
     const list = values[i]?.sessions || [];
-    sessions[date] = list;
+    sessions[date] = list.map(normalizeRecord);
     totalSessions += list.length;
   });
 
@@ -45,7 +46,8 @@ export async function getAllSessions(env, cors) {
 export async function getSession(date, env, cors) {
   const raw = await env.STUDY_KV.get(sessionKey(date), { type: "json" });
   if (!raw) return errResponse(404, "no sessions for that date", cors);
-  return json({ sessions: raw.sessions || [], updatedAt: Date.now() }, 200, cors);
+  const sessions = (raw.sessions || []).map(normalizeRecord);
+  return json({ sessions, updatedAt: Date.now() }, 200, cors);
 }
 
 // PUT /api/sessions/:date  body: { sessions: [...] }  →  { ok, updatedAt, sessions }

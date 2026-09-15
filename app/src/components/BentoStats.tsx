@@ -20,7 +20,7 @@ export function BentoStats({ weekStart, selectedKey }: { weekStart: Date; select
         const m = parseInt(String(s.duration)) || 0;
         totalMin += m;
         totalCount++;
-        if (s.done) {
+        if (s.status === 'done') {
           doneMin += m;
           doneCount++;
         }
@@ -42,7 +42,7 @@ export function BentoStats({ weekStart, selectedKey }: { weekStart: Date; select
       const m = parseInt(String(s.duration)) || 0;
       totalMin += m;
       totalCount++;
-      if (s.done) {
+      if (s.status === 'done') {
         doneMin += m;
         doneCount++;
       }

@@ -76,13 +76,15 @@ function fmtDate(d: Date) {
 type Phase = 'active' | 'celebrating';
 
 export function FocusModal({ onClose }: { onClose: () => void }) {
-  const toggleDone = useSessionStore((s) => s.toggleDone);
+  const setStatus = useSessionStore((s) => s.setStatus);
   const todaySessions = useSessionStore((s) => s.sessions[todayKey()] ?? []);
 
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isRunning, setIsRunning] = useState(true);
+  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [breakSeconds, setBreakSeconds] = useState(0);
   const [phase, setPhase] = useState<Phase>('active');
   const [focusedSeconds, setFocusedSeconds] = useState(0);
 
@@ -94,7 +96,7 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
       const now = new Date();
       const nowMin = now.getHours() * 60 + now.getMinutes();
       const match = todaySessions.find((s) => {
-        if (s.done) return false;
+        if (s.status === 'done') return false;
         const [h, m] = s.time.split(':').map(Number);
         const start = h * 60 + m;
         const end = start + (parseInt(String(s.duration)) || 0);
@@ -110,6 +112,8 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
         setTotalSeconds(Math.max(full, remaining));
         setTimeRemaining(remaining);
         setFocusedSeconds(Math.max(0, full - remaining));
+        setIsOnBreak(false);
+        setBreakSeconds(0);
         setIsRunning(true);
         setPhase('active');
       } else if (!match && activeSession) {
@@ -121,10 +125,20 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
     return () => clearInterval(id);
   }, [todaySessions, activeSession]);
 
-  // ─────── countdown + completion ───────
+  // ─────── countdown + break ticker + completion ───────
   useEffect(() => {
-    if (phase !== 'active' || !isRunning || timeRemaining <= 0) {
-      if (phase === 'active' && timeRemaining === 0 && activeSession) {
+    if (phase !== 'active') return;
+    if (isOnBreak) {
+      // break time is tracked separately and never counts toward focus
+      timerRef.current = setTimeout(() => {
+        setBreakSeconds((p) => p + 1);
+      }, 1000);
+      return () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      };
+    }
+    if (!isRunning || timeRemaining <= 0) {
+      if (timeRemaining === 0 && activeSession) {
         setPhase('celebrating');
       }
       return;
@@ -136,7 +150,7 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [phase, isRunning, timeRemaining, activeSession]);
+  }, [phase, isRunning, isOnBreak, timeRemaining, breakSeconds, activeSession]);
 
   // ─────── ESC closes ───────
   useEffect(() => {
@@ -166,6 +180,8 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
     setTimeRemaining(remaining);
     setTotalSeconds(Math.max(activeSession.duration * 60, remaining));
     setFocusedSeconds(0);
+    setIsOnBreak(false);
+    setBreakSeconds(0);
     setPhase('active');
     setIsRunning(true);
   };
@@ -174,9 +190,22 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
     setPhase('celebrating');
   };
 
+  const handleStartBreak = () => {
+    setIsRunning(false);
+    setIsOnBreak(true);
+  };
+
+  const handleEndBreak = () => {
+    setTimeRemaining((p) => p + breakSeconds);
+    setTotalSeconds((p) => p + breakSeconds);
+    setBreakSeconds(0);
+    setIsOnBreak(false);
+    setIsRunning(true);
+  };
+
   const handleBackToDashboard = () => {
-    if (activeSession && !activeSession.done) {
-      toggleDone(todayKey(), activeSession.id);
+    if (activeSession && activeSession.status !== 'done') {
+      setStatus(todayKey(), activeSession.id, 'done', focusedSeconds);
     }
     onClose();
   };
@@ -188,13 +217,14 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
 
   // ─────── celebration state ───────
   if (phase === 'celebrating') {
-    const currentlyDone = todaySessions.filter((s) => s.done).length;
+    const currentlyDone = todaySessions.filter((s) => s.status === 'done').length;
     const totalCount = todaySessions.length;
-    const doneAfter = currentlyDone + (activeSession.done ? 0 : 1);
+    const doneAfter = currentlyDone + (activeSession.status === 'done' ? 0 : 1);
     return (
       <Celebration
         session={activeSession}
         focusedLabel={fmtDuration(focusedSeconds)}
+        breakLabel={fmtDuration(breakSeconds)}
         doneCount={doneAfter}
         totalCount={totalCount}
         onBack={handleBackToDashboard}
@@ -208,6 +238,10 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
   const mins = Math.floor(timeRemaining / 60);
   const secs = timeRemaining % 60;
   const timerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  const breakMins = Math.floor(breakSeconds / 60);
+  const breakSecs = breakSeconds % 60;
+  const breakText = `${String(breakMins).padStart(2, '0')}:${String(breakSecs).padStart(2, '0')}`;
 
   return (
     <motion.div
@@ -258,10 +292,19 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
 
         <div className="focus-timer">
           <span
-            className={'focus-timer-digits' + (isRunning ? ' running' : ' paused')}
+            className={
+              'focus-timer-digits' +
+              (isOnBreak ? ' on-break' : isRunning ? ' running' : ' paused')
+            }
           >
             {timerText}
           </span>
+          {isOnBreak && (
+            <div className="focus-break-row" aria-live="polite">
+              <span className="focus-break-label">on break</span>
+              <span className="focus-break-time">{breakText}</span>
+            </div>
+          )}
         </div>
 
         <div className="focus-progress" aria-hidden="true">
@@ -275,18 +318,43 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="focus-controls">
+          {isOnBreak ? (
+            <button
+              type="button"
+              className="focus-btn focus-btn-primary"
+              onClick={handleEndBreak}
+            >
+              ▶ End break
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={'focus-btn focus-btn-primary' + (isRunning ? ' is-paused' : '')}
+              onClick={() => setIsRunning((r) => !r)}
+            >
+              {isRunning ? '❚❚ Pause' : '▶ Resume'}
+            </button>
+          )}
           <button
             type="button"
-            className={'focus-btn focus-btn-primary' + (isRunning ? ' is-paused' : '')}
-            onClick={() => setIsRunning((r) => !r)}
+            className={'focus-btn focus-btn-ghost' + (isOnBreak ? ' is-active' : '')}
+            onClick={isOnBreak ? handleEndBreak : handleStartBreak}
+            title={isOnBreak ? 'End break' : 'Take a break'}
+            disabled={!isRunning && !isOnBreak}
+            aria-label="Take a break"
           >
-            {isRunning ? '❚❚ Pause' : '▶ Resume'}
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+              <path d="M6 8H5a4 4 0 0 0 0 8h1" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+            </svg>
           </button>
           <button
             type="button"
             className="focus-btn focus-btn-ghost"
             onClick={handleReset}
             title="Restart timer"
+            disabled={isOnBreak}
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="1 4 1 10 7 10" />
@@ -401,6 +469,7 @@ function FocusClock() {
 function Celebration({
   session,
   focusedLabel,
+  breakLabel,
   doneCount,
   totalCount,
   onBack,
@@ -408,6 +477,7 @@ function Celebration({
 }: {
   session: Session;
   focusedLabel: string;
+  breakLabel: string;
   doneCount: number;
   totalCount: number;
   onBack: () => void;
@@ -501,6 +571,11 @@ function Celebration({
               <div className="focus-stat">
                 <span className="focus-stat-value">{focusedLabel}</span>
                 <span className="focus-stat-label">focused</span>
+              </div>
+              <div className="focus-stat-divider" />
+              <div className="focus-stat">
+                <span className="focus-stat-value">{breakLabel}</span>
+                <span className="focus-stat-label">break</span>
               </div>
               <div className="focus-stat-divider" />
               <div className="focus-stat">

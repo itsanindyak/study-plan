@@ -146,7 +146,9 @@ export function WeeklyScheduleModal({
                     return (
                       <div
                         key={session.id}
-                        className={`weekly-block ${session.done ? 'done' : ''}`}
+                        className={`weekly-block ${session.status === 'done' ? 'done' : ''}${
+                          session.status === 'notdone' ? ' notdone' : ''
+                        }`}
                         style={blockStyle}
                         onClick={() => onOpenSession(key, session)}
                         title={`${session.subject} — ${session.topic}\n${fmtTime12(session.time)} – ${fmtTime12(minToTime(startM + dur))}`}

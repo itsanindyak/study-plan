@@ -1,7 +1,8 @@
 // Cloudflare Worker — Study Plan backend.
 // Multi-key KV layout:
-//   session:YYYY-MM-DD  →  { sessions: [ {id, time, duration, subject, topic, color, done, updatedAt} ] }
-//   deadline:{id}       →  { id, title, dueDate, source, done, createdAt }   (with KV TTL)
+//   session:YYYY-MM-DD  →  { sessions: [ {id, time, duration, subject, topic, color, status, updatedAt} ] }
+//   deadline:{id}       →  { id, title, dueDate, source, status, createdAt }   (with KV TTL)
+// status is 'pending' | 'done' | 'notdone' (legacy rows with done:boolean are normalized on read).
 //
 // Auth: Bearer token from env.SECRET_TOKEN.
 // CORS: allowlist via env.ALLOWED_ORIGINS (comma-separated; "null" = file://).

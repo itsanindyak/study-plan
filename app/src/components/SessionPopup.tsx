@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { fmtTime12, minToTime, timeToMin, fmtDuration } from '@/lib/time';
 import { shade } from '@/lib/color';
+import { nextStatus, STATUS_LABEL } from '@/lib/status';
 import type { Session } from '@/types';
 
 export function SessionPopup({
@@ -14,7 +15,7 @@ export function SessionPopup({
   session: Session;
   onClose: () => void;
 }) {
-  const toggleDone = useSessionStore((s) => s.toggleDone);
+  const setStatus = useSessionStore((s) => s.setStatus);
   const remove = useSessionStore((s) => s.remove);
   const update = useSessionStore((s) => s.update);
 
@@ -66,8 +67,8 @@ export function SessionPopup({
   const startM = timeToMin(session.time);
   const endM = startM + dur;
 
-  const onDone = () => {
-    toggleDone(date, session.id);
+  const onMark = (pressed: 'done' | 'notdone') => () => {
+    setStatus(date, session.id, nextStatus(session.status, pressed));
     onClose();
   };
   const onDelete = () => {
@@ -176,15 +177,32 @@ export function SessionPopup({
             </div>
             <div className="popup-row">
               <span className="pr-label">status</span>
-              <span className="pr-value">{session.done ? '✓ completed' : '○ pending'}</span>
+              <span className="pr-value">{STATUS_LABEL[session.status]}</span>
             </div>
             <div className="popup-hex">
               <div className="ph-dot" style={{ background: session.color }} />
               <span>{session.color.toUpperCase()}</span>
             </div>
             <div className="popup-actions">
-              <button className="pa-done" onClick={onDone}>
-                {session.done ? '↺ mark pending' : '✓ mark done'}
+              <button
+                className={'pa-done' + (session.status === 'done' ? ' active' : '')}
+                onClick={onMark('done')}
+                aria-pressed={session.status === 'done'}
+                title={session.status === 'done' ? 'Click to clear back to pending' : 'Mark as done'}
+              >
+                ✓ done
+              </button>
+              <button
+                className={'pa-notdone' + (session.status === 'notdone' ? ' active' : '')}
+                onClick={onMark('notdone')}
+                aria-pressed={session.status === 'notdone'}
+                title={
+                  session.status === 'notdone'
+                    ? 'Click to clear back to pending'
+                    : 'Mark as not done'
+                }
+              >
+                ✕ not done
               </button>
               <button className="pa-edit" onClick={() => setIsEditing(true)}>edit</button>
               <button className="pa-del" onClick={onDelete}>delete</button>

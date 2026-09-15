@@ -1,14 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { DateKey, Deadline } from '@/types';
+import type { DateKey, Deadline, TaskStatus } from '@/types';
 import { newId } from '@/lib/id';
+import { normalizeDeadline } from '@/lib/status';
 
 interface DeadlineState {
   deadlines: Deadline[];
 
   get: () => Deadline[];
   add: (input: { title: string; dueDate: DateKey }) => Deadline;
-  toggle: (id: string) => void;
+  setStatus: (id: string, status: TaskStatus) => void;
   remove: (id: string) => void;
   replaceAll: (next: Deadline[]) => void;
 
@@ -31,25 +32,35 @@ export const useDeadlineStore = create<DeadlineState>()(
           title: input.title,
           dueDate: input.dueDate,
           source: 'manual',
-          done: false,
+          status: 'pending',
           createdAt: Date.now(),
         };
         set((s) => ({ deadlines: [...s.deadlines, d] }));
         return d;
       },
 
-      toggle: (id) =>
-        set((s) => ({
-          deadlines: s.deadlines.map((d) =>
-            d.id === id
-              ? { ...d, done: !d.done, completedAt: !d.done ? Date.now() : undefined }
-              : d,
-          ),
-        })),
+      setStatus: (id, status) =>
+        set((s) => {
+          const target = s.deadlines.find((d) => d.id === id);
+          // no-op when already in the requested state (avoids redundant sync push)
+          if (!target || target.status === status) return s;
+          return {
+            deadlines: s.deadlines.map((d) =>
+              d.id === id
+                ? { ...d, status, completedAt: status === 'done' ? Date.now() : undefined }
+                : d,
+            ),
+          };
+        }),
 
       remove: (id) => set((s) => ({ deadlines: s.deadlines.filter((d) => d.id !== id) })),
 
-      replaceAll: (next) => set({ deadlines: next }),
+      replaceAll: (next) =>
+        set({
+          deadlines: (next ?? [])
+            .map(normalizeDeadline)
+            .filter((d): d is Deadline => d !== null),
+        }),
 
       cleanup: () => {
         const now = new Date();
@@ -69,7 +80,19 @@ export const useDeadlineStore = create<DeadlineState>()(
         return { kept, removedIds };
       },
     }),
-    { name: 'studyplan_deadlines' },
+    {
+      name: 'studyplan_deadlines',
+      // migrate legacy `done: boolean` records out of localStorage on rehydrate
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<DeadlineState>;
+        return {
+          ...current,
+          deadlines: (p.deadlines ?? [])
+            .map(normalizeDeadline)
+            .filter((d): d is Deadline => d !== null),
+        };
+      },
+    },
   ),
 );
 

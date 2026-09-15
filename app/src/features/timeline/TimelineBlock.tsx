@@ -43,7 +43,12 @@ export function TimelineBlock({
 
   return (
     <div
-      className={'tl-block' + (session.done ? ' done' : '') + (compact ? ' compact' : '')}
+      className={
+        'tl-block' +
+        (session.status === 'done' ? ' done' : '') +
+        (session.status === 'notdone' ? ' notdone' : '') +
+        (compact ? ' compact' : '')
+      }
       style={style}
       onClick={onOpen}
       title={`${session.subject} — ${session.topic}\n${fmtTime12(session.time)} – ${fmtTime12(minToTime(endM))}`}

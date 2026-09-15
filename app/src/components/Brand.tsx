@@ -3,7 +3,7 @@ export function Brand() {
     <div className="brand">
       <div className="brand-mark" />
       <div className="brand-name">
-        studyplan<span>.</span>
+        samay<span>.</span>
       </div>
     </div>
   );

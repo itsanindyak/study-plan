@@ -19,7 +19,7 @@ export function DayStrip({
         const date = addDays(weekStart, i);
         const key = dateKey(date);
         const list = sessions[key] ?? [];
-        const done = list.filter((s) => s.done).length;
+        const done = list.filter((s) => s.status === 'done').length;
         const total = list.length;
         const pct = total > 0 ? (done / total) * 100 : 0;
         const isSelected = i === selectedDayIndex;

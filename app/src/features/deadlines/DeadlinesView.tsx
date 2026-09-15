@@ -1,15 +1,20 @@
 import { useMemo } from 'react';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
+import { STATUS_RANK } from '@/lib/status';
 import { DeadlineCard } from './DeadlineCard';
 
 export function DeadlinesView() {
   const deadlines = useDeadlineStore((s) => s.deadlines);
 
-  const active = useMemo(() => deadlines.filter((d) => !d.done), [deadlines]);
+  const active = useMemo(
+    () => deadlines.filter((d) => d.status === 'pending'),
+    [deadlines],
+  );
 
   const sorted = useMemo(() => {
     return [...deadlines].sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
+      const rank = STATUS_RANK[a.status] - STATUS_RANK[b.status];
+      if (rank !== 0) return rank;
       return (a.dueDate || '').localeCompare(b.dueDate || '');
     });
   }, [deadlines]);

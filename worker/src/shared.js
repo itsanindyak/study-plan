@@ -105,21 +105,48 @@ export function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// ─── tri-state status ─────────────────────────────────────────
+
+const VALID_STATUS = new Set(["pending", "done", "notdone"]);
+
+// Records written before the tri-state change carry `done: boolean`.
+// Map those (done:true → "done", done:false → "pending") so old KV data
+// keeps working, and treat anything unrecognized as "pending".
+export function normalizeStatus(rec) {
+  if (rec && typeof rec === "object") {
+    if (typeof rec.status === "string" && VALID_STATUS.has(rec.status)) {
+      return rec.status;
+    }
+    if (rec.done === true) return "done";
+  }
+  return "pending";
+}
+
+// Normalize a record read back from KV: always returns `status` and drops
+// the legacy `done` field so older stored rows migrate transparently.
+export function normalizeRecord(rec) {
+  if (!rec || typeof rec !== "object") return rec;
+  const { done, ...rest } = rec;
+  return { ...rest, status: normalizeStatus(rec) };
+}
+
 // ─── sanitizers ───────────────────────────────────────────────
 
 export function sanitizeSession(s) {
   if (!s || typeof s !== "object") return null;
   if (typeof s.subject !== "string") return null;
-  return {
+  const out = {
     id: typeof s.id === "string" && s.id ? s.id : newId(),
     time: typeof s.time === "string" ? s.time : "09:00",
     duration: Number.isFinite(+s.duration) && +s.duration > 0 ? +s.duration : 60,
     subject: s.subject,
     topic: typeof s.topic === "string" ? s.topic : "",
     color: typeof s.color === "string" ? s.color : "#6366f1",
-    done: !!s.done,
+    status: normalizeStatus(s),
     updatedAt: Number.isFinite(+s.updatedAt) ? +s.updatedAt : Date.now(),
   };
+  if (Number.isFinite(+s.focusedSeconds)) out.focusedSeconds = +s.focusedSeconds;
+  return out;
 }
 
 export function sanitizeDeadline(d) {
@@ -130,7 +157,7 @@ export function sanitizeDeadline(d) {
     title: d.title,
     dueDate: d.dueDate,
     source: typeof d.source === "string" ? d.source : "manual",
-    done: !!d.done,
+    status: normalizeStatus(d),
     createdAt: Number.isFinite(+d.createdAt) ? +d.createdAt : Date.now(),
   };
 }

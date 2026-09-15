@@ -4,6 +4,7 @@ import { useDeadlineStore } from '@/store/useDeadlineStore';
 import { SessionCard } from './SessionCard';
 import { EmptyState } from './EmptyState';
 import { DeadlineBanner } from './DeadlineBanner';
+import { STATUS_RANK } from '@/lib/status';
 import type { Session } from '@/types';
 
 export function SessionList({
@@ -17,7 +18,7 @@ export function SessionList({
   const deadlines = useDeadlineStore((s) => s.deadlines);
   const todaysDeadlines = deadlines
     .filter((d) => d.dueDate === date)
-    .sort((a, b) => Number(a.done) - Number(b.done));
+    .sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status]);
 
   if (sessions.length === 0 && todaysDeadlines.length === 0) {
     return (

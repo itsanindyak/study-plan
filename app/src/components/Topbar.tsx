@@ -10,13 +10,11 @@ export function Topbar({
   onPrevWeek,
   onNextWeek,
   onOpenSettings,
-  onOpenFocus,
 }: {
   weekStart: Date;
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onOpenSettings: () => void;
-  onOpenFocus: () => void;
 }) {
   const weekLabel = useMemo(() => {
     const weekEnd = addDays(weekStart, 6);
@@ -28,12 +26,7 @@ export function Topbar({
 
   return (
     <div className="topbar">
-      <HeaderLeft
-        actionLabel="focus"
-        actionIcon={<span>⚡</span>}
-        onAction={onOpenFocus}
-        actionTitle="Start Focus Mode"
-      />
+      <HeaderLeft />
       <div className="topbar-right">
         <SyncPill onClick={onOpenSettings} />
         <WeekNav

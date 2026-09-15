@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { DateKey, Session, SessionsByDate } from '@/types';
+import type { DateKey, Session, SessionsByDate, TaskStatus } from '@/types';
 import { newId } from '@/lib/id';
 import { makeColorPicker } from '@/lib/color';
+import { normalizeSession } from '@/lib/status';
 
 interface SessionState {
   sessions: SessionsByDate;
@@ -16,7 +17,12 @@ interface SessionState {
     date: DateKey,
     input: { subject: string; topic: string; time: string; duration: number },
   ) => Session;
-  toggleDone: (date: DateKey, id: string) => void;
+  setStatus: (
+    date: DateKey,
+    id: string,
+    status: TaskStatus,
+    focusedSeconds?: number,
+  ) => void;
   remove: (date: DateKey, id: string) => void;
   update: (
     date: DateKey,
@@ -48,7 +54,7 @@ export const useSessionStore = create<SessionState>()(
           time: input.time,
           duration: input.duration,
           color,
-          done: false,
+          status: 'pending',
           updatedAt: Date.now(),
         };
         set((s) => ({
@@ -60,16 +66,30 @@ export const useSessionStore = create<SessionState>()(
         return session;
       },
 
-      toggleDone: (date, id) =>
+      setStatus: (date, id, status, focusedSeconds) =>
         set((s) => {
           const list = s.sessions[date];
           if (!list) return s;
+          const target = list.find((x) => x.id === id);
+          // no-op when already there, so we don't stamp updatedAt or push to cloud
+          if (!target || target.status === status) return s;
           return {
             sessions: {
               ...s.sessions,
-              [date]: list.map((x) =>
-                x.id === id ? { ...x, done: !x.done, updatedAt: Date.now() } : x,
-              ),
+              [date]: list.map((x) => {
+                if (x.id !== id) return x;
+                const next: Session = {
+                  ...x,
+                  status,
+                  updatedAt: Date.now(),
+                };
+                // only stamp focusedSeconds on the path coming from focus mode;
+                // leaving undefined when un-marking or from other entry points
+                if (focusedSeconds !== undefined) {
+                  next.focusedSeconds = focusedSeconds;
+                }
+                return next;
+              }),
             },
           };
         }),
@@ -119,12 +139,29 @@ export const useSessionStore = create<SessionState>()(
         }),
 
       hydrateAll: (cloud) => {
-        set({ sessions: cloud });
+        const sessions: SessionsByDate = {};
+        for (const [date, list] of Object.entries(cloud ?? {})) {
+          sessions[date] = (list ?? [])
+            .map(normalizeSession)
+            .filter((s): s is Session => s !== null);
+        }
+        set({ sessions });
       },
     }),
     {
       name: 'studyplan_sessions',
       partialize: (s) => ({ sessions: s.sessions, subjectColors: s.subjectColors }),
+      // migrate legacy `done: boolean` records out of localStorage on rehydrate
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<SessionState>;
+        const sessions: SessionsByDate = {};
+        for (const [date, list] of Object.entries(p.sessions ?? {})) {
+          sessions[date] = (list ?? [])
+            .map(normalizeSession)
+            .filter((s): s is Session => s !== null);
+        }
+        return { ...current, sessions, subjectColors: p.subjectColors ?? {} };
+      },
     },
   ),
 );

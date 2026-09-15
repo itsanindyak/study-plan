@@ -1,8 +1,15 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
+import { timeToMin } from '@/lib/time';
 
 export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
   const add = useSessionStore((s) => s.add);
+  const allSessions = useSessionStore((s) => s.sessions);
+  const sessions = useMemo(
+    () => allSessions[selectedDate] ?? [],
+    [allSessions, selectedDate],
+  );
+
   const [subject, setSubject] = useState('');
   const [topic, setTopic] = useState('');
 
@@ -14,6 +21,27 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
   // Duration states (Hours, Minutes)
   const [durHours, setDurHours] = useState<number>(1);
   const [durMins, setDurMins] = useState<number>(0);
+
+  // End time of the day's last session — the form chains from there so
+  // back-to-back sessions can be added without re-picking the start time.
+  const lastEndMin = useMemo(() => {
+    let max = -1;
+    for (const s of sessions) {
+      const end = timeToMin(s.time) + (parseInt(String(s.duration)) || 0);
+      if (end > max) max = end;
+    }
+    return max >= 0 ? max % 1440 : null;
+  }, [sessions]);
+
+  useEffect(() => {
+    if (lastEndMin === null) return;
+    const h24 = Math.floor(lastEndMin / 60) % 24;
+    const mm = lastEndMin % 60;
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    setStartHour(String(h12).padStart(2, '0'));
+    setStartMin(String(mm).padStart(2, '0'));
+    setStartPeriod(h24 >= 12 ? 'PM' : 'AM');
+  }, [lastEndMin]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -37,9 +65,7 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
 
     setSubject('');
     setTopic('');
-    setStartHour('09');
-    setStartMin('00');
-    setStartPeriod('AM');
+    // start time is not reset here — it follows the new last session's end time
     setDurHours(1);
     setDurMins(0);
   };

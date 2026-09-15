@@ -228,6 +228,9 @@
 .focus-timer-digits.paused {
   opacity: 0.55;
 }
+.focus-timer-digits.on-break {
+  opacity: 0.4;
+}
 @keyframes focusPausedPulse {
   0%, 100% {
     opacity: 0.55;
@@ -235,6 +238,48 @@
   50% {
     opacity: 0.35;
   }
+}
+
+/* ─────── break row (under main timer) ─────── */
+.focus-break-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: #fff;
+  animation: focusFadeIn 0.25s ease;
+}
+.focus-break-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0.25rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.focus-break-time {
+  font-size: 1.4rem;
+  font-weight: 600;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* ─────── break button active state ─────── */
+.focus-btn-ghost.is-active {
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+}
+.focus-btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ─────── progress ─────── */

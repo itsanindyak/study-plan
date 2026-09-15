@@ -124,11 +124,12 @@
 }
 .popup-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1.2rem;
 }
 .popup-actions button {
-  flex: 1;
+  flex: 1 1 40%;
   height: 38px;
   border-radius: 10px;
   border: none;
@@ -141,11 +142,32 @@
     transform 0.15s;
 }
 .popup-actions .pa-done {
-  background: var(--text);
-  color: #fff;
+  background: var(--bg);
+  color: var(--text-2);
 }
 .popup-actions .pa-done:hover {
-  background: #2a2622;
+  background: var(--border);
+}
+.popup-actions .pa-done.active {
+  background: var(--accent);
+  color: #fff;
+}
+.popup-actions .pa-done.active:hover {
+  background: #e84d31;
+}
+.popup-actions .pa-notdone {
+  background: var(--bg);
+  color: var(--text-2);
+}
+.popup-actions .pa-notdone:hover {
+  background: var(--border);
+}
+.popup-actions .pa-notdone.active {
+  background: var(--red);
+  color: #fff;
+}
+.popup-actions .pa-notdone.active:hover {
+  background: #c13b3b;
 }
 .popup-actions .pa-del {
   background: var(--bg);
@@ -688,6 +710,16 @@
 
 .weekly-block.done {
   opacity: 0.5;
+}
+
+.weekly-block.notdone {
+  opacity: 0.75;
+  box-shadow: inset 0 0 0 2px var(--red);
+}
+.weekly-block.notdone .weekly-block-topic,
+.weekly-block.notdone .weekly-block-subject {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
 }
 
 .weekly-block-subject {

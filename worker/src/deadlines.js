@@ -7,6 +7,7 @@ import {
   listAllKeys,
   computeExpiration,
   sanitizeDeadline,
+  normalizeRecord,
   json,
   errResponse,
 } from "./shared.js";
@@ -19,12 +20,13 @@ export async function listDeadlines(env, cors) {
   );
   const items = values
     .filter((v) => v != null)
+    .map(normalizeRecord)
     .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
   console.log(`listDeadlines: ${items.length} of ${keys.length} keys`);
   return json({ items, updatedAt: Date.now() }, 200, cors);
 }
 
-// PUT /api/deadlines/:id  body: { id, title, dueDate, source, done, createdAt }  →  { ok, expiresAt }
+// PUT /api/deadlines/:id  body: { id, title, dueDate, source, status, createdAt }  →  { ok, expiresAt }
 export async function putDeadline(id, body, env, cors) {
   const clean = sanitizeDeadline({ ...(body || {}), id });
   if (!clean) {

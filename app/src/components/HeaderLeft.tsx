@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 import { Brand } from './Brand';
 
 interface HeaderLeftProps {
-  actionLabel: string;
-  actionIcon: ReactNode;
-  onAction: () => void;
+  actionLabel?: string;
+  actionIcon?: ReactNode;
+  onAction?: () => void;
   actionTitle?: string;
   variant?: 'default' | 'focus';
 }
@@ -20,16 +20,18 @@ export function HeaderLeft({
   return (
     <div className={cls}>
       <Brand />
-      <button
-        type="button"
-        className="header-action"
-        onClick={onAction}
-        title={actionTitle}
-        aria-label={actionTitle}
-      >
-        {actionIcon}
-        <span>{actionLabel}</span>
-      </button>
+      {onAction && (
+        <button
+          type="button"
+          className="header-action"
+          onClick={onAction}
+          title={actionTitle}
+          aria-label={actionTitle}
+        >
+          {actionIcon}
+          <span>{actionLabel}</span>
+        </button>
+      )}
     </div>
   );
 }
