@@ -69,18 +69,21 @@
   box-shadow: var(--shadow-sm);
 }
 .dl.done {
-  opacity: 0.55;
+  background: var(--green-soft);
+  border-color: rgba(0, 230, 118, 0.35);
+  opacity: 0.75;
 }
 .dl.done .dl-title {
+  color: var(--green-dark);
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
 }
 .dl.notdone {
   background: var(--red-soft);
-  border-color: rgba(214, 69, 69, 0.32);
+  border-color: rgba(255, 23, 68, 0.32);
 }
 .dl.notdone .dl-title {
-  color: var(--red);
+  color: var(--red-dark);
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
 }
@@ -119,7 +122,7 @@
   border-color: var(--green);
 }
 .dl .dl-check.checked::after {
-  color: #fff;
+  color: #06341f;
 }
 .dl .dl-notdone {
   width: 20px;
@@ -182,7 +185,7 @@
   font-weight: 600;
 }
 .dl .dl-meta .due.notdone-tag {
-  color: var(--red);
+  color: var(--red-dark);
   font-weight: 600;
 }
 .dl .dl-meta .overdue-tag {

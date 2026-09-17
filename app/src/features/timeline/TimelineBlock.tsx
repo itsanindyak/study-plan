@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { timeToMin, minToTime, fmtTime12 } from '@/lib/time';
-import { shade } from '@/lib/color';
+import { statusGradient } from '@/lib/color';
 import type { Session } from '@/types';
 
 export function TimelineBlock({
@@ -28,7 +28,7 @@ export function TimelineBlock({
   const style: CSSProperties = {
     top: `${top}px`,
     height: `${height}px`,
-    background: `linear-gradient(135deg, ${session.color}, ${shade(session.color, -18)})`,
+    background: statusGradient(session.color, session.status),
   };
   if (count > 1) {
     const leftPct = (lane / count) * 100;

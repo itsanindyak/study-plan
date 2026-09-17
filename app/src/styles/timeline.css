@@ -131,11 +131,12 @@
   z-index: 5;
 }
 .tl-block.done {
-  opacity: 0.55;
+  opacity: 0.8;
+  box-shadow: 0 0 0 1px rgba(0, 230, 118, 0.5);
 }
 .tl-block.notdone {
-  opacity: 0.7;
-  box-shadow: inset 0 0 0 2px var(--red);
+  opacity: 0.85;
+  box-shadow: 0 0 0 1px rgba(255, 23, 68, 0.55);
 }
 .tl-block.notdone .tlb-title,
 .tl-block.notdone .tlb-subject {

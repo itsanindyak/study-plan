@@ -1,14 +1,14 @@
-import { useSyncPill, pullFromCloud } from '@/features/sync/useCloudSync';
+import { useSyncPill, refreshFromCloud } from '@/features/sync/useCloudSync';
 import { useSettingsStore, selectIsConfigured } from '@/store/useSettingsStore';
 
 export function SyncPill({ onClick }: { onClick: () => void }) {
-  const { state } = useSyncPill();
+  const { state, origin } = useSyncPill();
   const configured = useSettingsStore(selectIsConfigured);
 
   const handleClick = async (e: React.MouseEvent) => {
     if (configured) {
       e.stopPropagation();
-      await pullFromCloud();
+      await refreshFromCloud();
     } else {
       onClick();
     }
@@ -20,8 +20,13 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
         type="button"
         className={`sync-reload-btn ${state === 'syncing' ? 'is-syncing' : ''}`}
         data-state={state}
+        data-origin={origin}
         onClick={handleClick}
-        title="cloud sync status — click to sync now"
+        title={
+          origin === 'cache'
+            ? 'showing cached data — cloud unreachable, click to retry'
+            : 'cloud sync status — click to sync now'
+        }
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

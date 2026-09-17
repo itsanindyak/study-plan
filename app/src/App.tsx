@@ -10,9 +10,10 @@ import { Timeline } from '@/features/timeline/Timeline';
 import { WeeklyScheduleModal } from '@/features/timeline/WeeklyScheduleModal';
 import { SessionPopup } from '@/components/SessionPopup';
 import { SettingsModal } from '@/features/settings/SettingsModal';
-import { useCloudSync } from '@/features/sync/useCloudSync';
+import { useCloudSync, useSyncPill, refreshFromCloud, ensureDateLoaded } from '@/features/sync/useCloudSync';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
+import { useSettingsStore, selectIsConfigured } from '@/store/useSettingsStore';
 import { DAYS, MONTHS, addDays, dateKey, getWeekStart, todayMondayIndex } from '@/lib/date';
 import type { Session } from '@/types';
 
@@ -27,6 +28,9 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [weeklyOpen, setWeeklyOpen] = useState(false);
 
+  const configured = useSettingsStore(selectIsConfigured);
+  const { state: syncState, booting, origin, lastCloudAt, lastError, hasCache } = useSyncPill();
+
   // auto-cleanup deadlines on mount (3-days-past purge) so the UI is tidy
   // before the cloud pull potentially replaces them.
   useEffect(() => {
@@ -39,6 +43,11 @@ export function App() {
     selectedDayIndex,
   ]);
   const selectedKey = useMemo(() => dateKey(selectedDate), [selectedDate]);
+
+  // the cache only holds recent days, so an older week gets pulled on demand
+  useEffect(() => {
+    for (let i = 0; i < DAYS.length; i++) void ensureDateLoaded(dateKey(addDays(weekStart, i)));
+  }, [weekStart]);
 
   const daySessions = useSessionStore((s) => s.sessions[selectedKey]) ?? [];
 
@@ -64,6 +73,31 @@ export function App() {
     setSelectedDayIndex(0);
   };
 
+  // cloud-first: with a token set, nothing is shown until the database has
+  // been read once, because until then there is no way to tell cache from truth
+  if (configured && booting) {
+    return (
+      <div className="boot-gate">
+        <div className="boot-mark" />
+        <p>reading your plan from the cloud…</p>
+      </div>
+    );
+  }
+
+  const offlineCache = configured && origin === 'cache';
+  const cachedAt = lastCloudAt
+    ? new Date(lastCloudAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const reason = lastError ? ` (${lastError})` : '';
+  const bannerText =
+    syncState === 'syncing'
+      ? 'reconnecting to the cloud…'
+      : hasCache
+        ? `cloud not reachable${reason} — still showing the copy cached ${
+            cachedAt ? `at ${cachedAt}` : 'earlier'
+          }. edits are queued and upload once the connection is back.`
+        : `cloud not reachable${reason} — nothing is cached on this device yet, so there is nothing to show.`;
+
   return (
     <div className="app">
       <Topbar
@@ -72,6 +106,19 @@ export function App() {
         onNextWeek={goNextWeek}
         onOpenSettings={() => setSettingsOpen(true)}
       />
+
+      {offlineCache && (
+        <div className="offline-banner" role="status">
+          <span>{bannerText}</span>
+          <button
+            type="button"
+            disabled={syncState === 'syncing'}
+            onClick={() => void refreshFromCloud()}
+          >
+            retry
+          </button>
+        </div>
+      )}
 
       <BentoStats weekStart={weekStart} selectedKey={selectedKey} />
 
@@ -158,7 +205,11 @@ export function App() {
         </div>
       </div>
 
-      <div className="footer">local-first · syncs to cloud when connected</div>
+      <div className="footer">
+        {configured
+          ? 'cloud is the source of truth · this device keeps a cache for offline'
+          : 'local-first · syncs to cloud when connected'}
+      </div>
 
       <AnimatePresence>
         {openSession && (

@@ -46,6 +46,14 @@ export const kvClient = {
     return res?.items ?? null;
   },
 
+  async getSession(cfg: CloudConfig, date: DateKey): Promise<Session[] | null> {
+    const res = await request<{ sessions: Session[]; updatedAt: number }>(
+      cfg,
+      `/api/sessions/${date}`,
+    );
+    return res?.sessions ?? null;
+  },
+
   async putSession(cfg: CloudConfig, date: DateKey, sessions: Session[]): Promise<void> {
     await request(cfg, `/api/sessions/${date}`, {
       method: 'PUT',
@@ -57,8 +65,13 @@ export const kvClient = {
     await request(cfg, `/api/sessions/${date}`, { method: 'DELETE' });
   },
 
-  async putDeadline(cfg: CloudConfig, d: Deadline): Promise<void> {
-    await request(cfg, `/api/deadlines/${encodeURIComponent(d.id)}`, {
+  // The worker applies last-write-wins per item; a stale PUT returns
+  // { ok: false, stale: true } with the stored winner instead of overwriting.
+  async putDeadline(
+    cfg: CloudConfig,
+    d: Deadline,
+  ): Promise<{ ok: boolean; stale?: boolean } | null> {
+    return request<{ ok: boolean; stale?: boolean }>(cfg, `/api/deadlines/${encodeURIComponent(d.id)}`, {
       method: 'PUT',
       body: JSON.stringify(d),
     });

@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { fmtTime12, minToTime, timeToMin, fmtDuration } from '@/lib/time';
-import { shade } from '@/lib/color';
+import { statusGradient } from '@/lib/color';
 import { nextStatus, STATUS_LABEL } from '@/lib/status';
 import type { Session } from '@/types';
 
@@ -125,9 +125,7 @@ export function SessionPopup({
         <div className="popup-head">
           <div
             className="popup-swatch"
-            style={{
-              background: `linear-gradient(135deg, ${session.color}, ${shade(session.color, -18)})`,
-            }}
+            style={{ background: statusGradient(session.color, session.status) }}
           />
           {!isEditing ? (
             <div className="popup-title">

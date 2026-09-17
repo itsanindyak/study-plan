@@ -73,7 +73,7 @@ Use this in the "Test connection" button in settings. The frontend doesn't read 
   "subject":   "Math",
   "topic":     "Linear algebra",
   "color":     "#ff5a3c",
-  "done":      false,
+  "status":    "pending",
   "updatedAt": 1717770000000
 }
 ```
@@ -86,8 +86,9 @@ Use this in the "Test connection" button in settings. The frontend doesn't read 
 | `subject` | string | Non-empty. |
 | `topic` | string | Free text. |
 | `color` | string | CSS hex. |
-| `done` | boolean | Toggled by the user. |
+| `status` | string | `"pending"` \| `"done"` \| `"notdone"`. Legacy rows with `done: boolean` are normalized on read. |
 | `updatedAt` | number | **Unix ms.** Bump on every edit. Used for conflict resolution. |
+| `focusedSeconds` | number (optional) | Actual focus time from focus mode. Preserved through sync. |
 
 **PUT is authoritative.** Whatever you PUT becomes the new state for that date. Items not in the body are removed. So:
 
@@ -97,11 +98,21 @@ Use this in the "Test connection" button in settings. The frontend doesn't read 
 
 There is no PATCH. The client is expected to keep the full list locally and replace.
 
-**GET `/api/sessions-all` is the boot endpoint.** Frontend should call it once on page load, then **REPLACE** localStorage with the response. Cloud is the source of truth. If cloud is empty, local is wiped. If the cloud fetch fails, local is left untouched and used as an offline cache for the session.
+**GET `/api/sessions-all` is the boot endpoint.** The frontend calls it on page load, behind a
+loading gate, and **REPLACE**s its local copy with the response — cloud is the source of truth and
+localStorage is only a cache. If the cloud fetch fails, the cached copy stays on screen with an
+explicit "offline, showing cache" state, and edits queue up for later.
 
-The same applies to deadlines: `GET /api/deadlines` → replace `localStorage.studyplan_deadlines`. No per-item merge.
+The one exception is **first-writer adoption**: a device that has never completed a pull before
+(no `lastCloudAt` in `localStorage.studyplan_sync_meta`) that holds data while the cloud is empty
+pushes its data up instead of being wiped. After that first sync, an empty cloud genuinely means
+empty, and the local copy is replaced.
 
-> **Migration impact:** if a user had local data before connecting to cloud, that data is overwritten on the first successful boot. Make sure the user has synced before pulling — i.e., a "connected ✓" status that says "synced from cloud" implies a successful pull, after which local is gone.
+Deadlines work the same way (`GET /api/deadlines` → replace `localStorage.studyplan_deadlines`),
+except the PUT is last-write-wins per item rather than a whole-collection replace.
+
+> **Before this adoption rule existed**, connecting a device with pre-existing local data to an
+> empty account destroyed that data on the first boot. The gate is `lastCloudAt == null`.
 
 ---
 
@@ -112,7 +123,7 @@ The same applies to deadlines: `GET /api/deadlines` → replace `localStorage.st
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | GET | `/api/deadlines` | — | `{ items: [...], updatedAt }` |
-| PUT | `/api/deadlines/:id` | `{ id, title, dueDate, source, done, createdAt }` | `{ ok, expiresAt }` |
+| PUT | `/api/deadlines/:id` | `{ id, title, dueDate, source, status, createdAt, updatedAt }` | `{ ok, expiresAt }` or `{ ok: false, stale: true, item }` |
 | DELETE | `/api/deadlines/:id` | — | `{ ok }` |
 
 #### A deadline object
@@ -123,8 +134,9 @@ The same applies to deadlines: `GET /api/deadlines` → replace `localStorage.st
   "title":     "CS101 Lab 3",
   "dueDate":   "2026-06-10",
   "source":    "manual",
-  "done":      false,
-  "createdAt": 1717770000000
+  "status":    "pending",
+  "createdAt": 1717770000000,
+  "updatedAt": 1717770000000
 }
 ```
 
@@ -134,8 +146,15 @@ The same applies to deadlines: `GET /api/deadlines` → replace `localStorage.st
 | `title` | string | Non-empty. |
 | `dueDate` | string | "YYYY-MM-DD". Used for TTL and sort order. |
 | `source` | string | `"manual"` (UI) or `"gmail"` (future). Worker doesn't filter on it. |
-| `done` | boolean | Client's responsibility to update. |
+| `status` | string | `"pending"` \| `"done"` \| `"notdone"`. Legacy `done: boolean` normalized on read. |
 | `createdAt` | number | **Unix ms.** Set once on insert. |
+| `updatedAt` | number | **Unix ms.** Bumped on every edit. Drives last-write-wins. |
+
+**PUT is last-write-wins per item.** The worker compares `updatedAt` against the
+stored copy; an older write is rejected with **200** `{ ok: false, stale: true, item }`
+where `item` is the stored winner. A newer (or equal) write replaces the item.
+So a stale client can never clobber a newer edit — but it also won't get a 4xx,
+so check the response body if you need to know which copy won.
 
 **PUT also accepts `id` in the URL only** — if the body lacks `id`, the URL's id is used. The server always returns the canonical id (URL's).
 
@@ -210,7 +229,12 @@ The frontend already has all of this wired up. The endpoints above are the contr
 - **No per-user separation** — single bearer token = single user. Not multi-tenant.
 - **No rate limiting** — fine for personal use.
 - **No request signing** — TLS + bearer token is the only auth.
-- **No conflict merging on the server** — PUT replaces. The client is expected to `bootFromCloud` first (cloud is authoritative — REPLACE local, don't merge), then PUT. (See `worker.md` §3 "Sessions".)
+- **Conflict handling is split by entity:**
+  - *Deadlines* — last-write-wins **server-side**, per item, by `updatedAt`.
+  - *Sessions* — `PUT /api/sessions/:date` still **replaces** the whole day. The client
+    avoids clobbering by re-reading the day and merging by `updatedAt` *before* pushing.
+    Deletions are expressed as absence from the list, which is why the merge can't live
+    server-side without tombstones.
 
 ---
 
@@ -256,7 +280,12 @@ You don't need to read the worker source to call it. Just:
 - **Five data shapes:** `Session`, `Deadline`, `DateList`, `SessionAll`, `DeadlineList`
 - **All times are Unix milliseconds except `expiresAt` (seconds)** and `dueDate` ("YYYY-MM-DD" string)
 - **All ids are client-generated** — generate once, never change
-- **PUT replaces, it doesn't merge** — send the full list
-- **Cloud is the source of truth** — on boot, REPLACE localStorage with cloud response. No per-item merge. If cloud is empty, local is wiped.
+- **PUT replaces the day, it doesn't merge** — send the full list. The client merges by `updatedAt`
+  *before* pushing, and carries local deletions as tombstones so the merge doesn't resurrect them.
+- **Cloud is the source of truth** — on boot the client reconciles the local copy with the cloud
+  response. A device with cached data paints it immediately and refreshes in the background
+  (stale-while-revalidate); only a device with nothing cached waits on the first read. A fetch
+  failure leaves the cache visible, names the reason, and retries on a capped backoff. First-ever
+  sync from a device holding data against an empty cloud pushes instead (see §3).
 
 If you have to add a feature that needs the worker to do something new, the cleanest path is to add a new endpoint in `src/index.js` + a new file in `src/`. Don't modify the existing endpoints without bumping the API version.

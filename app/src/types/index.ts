@@ -25,6 +25,7 @@ export interface Deadline {
   status: TaskStatus;
   createdAt: number; // ms epoch
   completedAt?: number; // ms epoch, set when status becomes 'done'
+  updatedAt?: number; // ms epoch, bumped on every edit — used for conflict resolution
 }
 
 export type SyncState = 'offline' | 'syncing' | 'synced' | 'error';

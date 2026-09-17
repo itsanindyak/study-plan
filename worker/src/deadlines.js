@@ -26,13 +26,28 @@ export async function listDeadlines(env, cors) {
   return json({ items, updatedAt: Date.now() }, 200, cors);
 }
 
-// PUT /api/deadlines/:id  body: { id, title, dueDate, source, status, createdAt }  →  { ok, expiresAt }
+// PUT /api/deadlines/:id  body: { id, title, dueDate, source, status, createdAt, updatedAt }  →  { ok, expiresAt }
+//
+// Last-write-wins per item: a PUT whose updatedAt is older than the stored
+// copy is ignored so a stale device can't clobber a newer edit. The stored
+// winner is returned with { ok: false, stale: true }.
 export async function putDeadline(id, body, env, cors) {
   const clean = sanitizeDeadline({ ...(body || {}), id });
   if (!clean) {
     console.warn(`putDeadline[${id}]: rejected — missing title or dueDate`);
     return errResponse(400, "missing title or dueDate", cors);
   }
+
+  const existing = await env.STUDY_KV.get(deadlineKey(id), { type: "json" });
+  const existingUpdatedAt = existing ? +existing.updatedAt : NaN;
+  if (Number.isFinite(existingUpdatedAt) && existingUpdatedAt > clean.updatedAt) {
+    const expiresAt = computeExpiration(existing.dueDate || clean.dueDate);
+    console.log(
+      `putDeadline[${id}]: stale write ignored (client=${clean.updatedAt} stored=${existingUpdatedAt})`
+    );
+    return json({ ok: false, stale: true, item: normalizeRecord(existing), expiresAt }, 200, cors);
+  }
+
   const expiresAt = computeExpiration(clean.dueDate);
   await env.STUDY_KV.put(
     deadlineKey(id),

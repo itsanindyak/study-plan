@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 import type { DateKey, Session, SessionsByDate, TaskStatus } from '@/types';
 import { newId } from '@/lib/id';
 import { makeColorPicker } from '@/lib/color';
+import { addDays, dateKey } from '@/lib/date';
+import { pinnedDates } from '@/lib/cachePins';
 import { normalizeSession } from '@/lib/status';
 
 interface SessionState {
@@ -36,6 +38,22 @@ interface SessionState {
 }
 
 const colorPicker = makeColorPicker();
+
+// localStorage keeps only recent days; the database keeps everything and older
+// days are fetched on demand. Every persist writes one JSON string for the
+// whole slice, so without a window each edit re-serialises the user's entire
+// history and the ~5MB quota creeps closer.
+export const CACHE_WINDOW_DAYS = 90;
+
+function cacheWindow(sessions: SessionsByDate): SessionsByDate {
+  const cutoff = dateKey(addDays(new Date(), -CACHE_WINDOW_DAYS));
+  const out: SessionsByDate = {};
+  for (const [date, list] of Object.entries(sessions)) {
+    // ISO date keys compare correctly as strings, so no parsing needed
+    if (date >= cutoff || pinnedDates.has(date)) out[date] = list;
+  }
+  return out;
+}
 
 export const useSessionStore = create<SessionState>()(
   persist(
@@ -150,7 +168,7 @@ export const useSessionStore = create<SessionState>()(
     }),
     {
       name: 'studyplan_sessions',
-      partialize: (s) => ({ sessions: s.sessions, subjectColors: s.subjectColors }),
+      partialize: (s) => ({ sessions: cacheWindow(s.sessions), subjectColors: s.subjectColors }),
       // migrate legacy `done: boolean` records out of localStorage on rehydrate
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SessionState>;

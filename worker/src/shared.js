@@ -152,12 +152,15 @@ export function sanitizeSession(s) {
 export function sanitizeDeadline(d) {
   if (!d || typeof d !== "object") return null;
   if (typeof d.title !== "string" || typeof d.dueDate !== "string") return null;
+  const createdAt = Number.isFinite(+d.createdAt) ? +d.createdAt : Date.now();
   return {
     id: typeof d.id === "string" && d.id ? d.id : newId(),
     title: d.title,
     dueDate: d.dueDate,
     source: typeof d.source === "string" ? d.source : "manual",
     status: normalizeStatus(d),
-    createdAt: Number.isFinite(+d.createdAt) ? +d.createdAt : Date.now(),
+    createdAt,
+    // last-write-wins marker; legacy rows have none, so fall back to createdAt
+    updatedAt: Number.isFinite(+d.updatedAt) ? +d.updatedAt : createdAt,
   };
 }

@@ -149,11 +149,11 @@
   background: var(--border);
 }
 .popup-actions .pa-done.active {
-  background: var(--accent);
+  background: var(--green-dark);
   color: #fff;
 }
 .popup-actions .pa-done.active:hover {
-  background: #e84d31;
+  background: #00964c;
 }
 .popup-actions .pa-notdone {
   background: var(--bg);
@@ -163,11 +163,11 @@
   background: var(--border);
 }
 .popup-actions .pa-notdone.active {
-  background: var(--red);
+  background: var(--red-dark);
   color: #fff;
 }
 .popup-actions .pa-notdone.active:hover {
-  background: #c13b3b;
+  background: #b00000;
 }
 .popup-actions .pa-del {
   background: var(--bg);
@@ -304,6 +304,12 @@
   color: var(--accent);
   border-color: #f5cdc1;
   background: #fdf1ed;
+}
+/* showing a cache reads differently from a failed write: amber, not red */
+.sync-reload-btn[data-origin='cache'] {
+  color: #8a6a2a;
+  border-color: #f1debf;
+  background: #fdf6e3;
 }
 
 @keyframes syncReloadSpin {
@@ -709,12 +715,13 @@
 }
 
 .weekly-block.done {
-  opacity: 0.5;
+  opacity: 0.8;
+  box-shadow: 0 0 0 1px rgba(0, 230, 118, 0.55);
 }
 
 .weekly-block.notdone {
-  opacity: 0.75;
-  box-shadow: inset 0 0 0 2px var(--red);
+  opacity: 0.85;
+  box-shadow: 0 0 0 1px rgba(255, 23, 68, 0.6);
 }
 .weekly-block.notdone .weekly-block-topic,
 .weekly-block.notdone .weekly-block-subject {

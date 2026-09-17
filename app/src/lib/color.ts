@@ -1,3 +1,23 @@
+import type { TaskStatus } from '@/types';
+
+// status tints a session/block regardless of its subject color:
+// done → green, not-done → red, pending → its own color
+export function statusColor(color: string, status: TaskStatus): string {
+  if (status === 'done') return 'var(--green)';
+  if (status === 'notdone') return 'var(--red)';
+  return color;
+}
+
+export function statusGradient(color: string, status: TaskStatus): string {
+  if (status === 'done') {
+    return 'linear-gradient(135deg, var(--green), var(--green-dark))';
+  }
+  if (status === 'notdone') {
+    return 'linear-gradient(135deg, var(--red), var(--red-dark))';
+  }
+  return `linear-gradient(135deg, ${color}, ${shade(color, -18)})`;
+}
+
 export const PALETTE = [
   '#6366f1',
   '#ec4899',

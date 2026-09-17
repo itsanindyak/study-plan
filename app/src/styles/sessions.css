@@ -120,27 +120,34 @@
   transform: translateY(-1px);
 }
 .session.done {
-  background: var(--bg);
-  border-color: var(--border);
-  opacity: 0.55;
+  background: var(--green-soft);
+  border-color: rgba(0, 230, 118, 0.35);
+  opacity: 0.75;
+}
+.session.done:hover {
+  border-color: rgba(0, 230, 118, 0.55);
+}
+.session.done .s-title {
+  color: var(--green-dark);
 }
 .session.notdone {
   background: var(--red-soft);
-  border-color: rgba(214, 69, 69, 0.32);
+  border-color: rgba(255, 23, 68, 0.32);
 }
 .session.notdone:hover {
-  border-color: rgba(214, 69, 69, 0.5);
+  border-color: rgba(255, 23, 68, 0.5);
 }
 .session.notdone .s-title {
-  color: var(--red);
+  color: var(--red-dark);
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
 }
 .session.notdone .s-title .s-topic {
-  color: rgba(214, 69, 69, 0.7);
+  color: rgba(255, 23, 68, 0.7);
 }
 .session.done .s-color {
-  opacity: 0.35;
+  opacity: 1;
+  box-shadow: 0 0 6px rgba(0, 230, 118, 0.45);
 }
 .session.done .s-meta {
   opacity: 0.55;
@@ -552,39 +559,39 @@
   border-color: var(--accent);
 }
 .dl-banner.done {
-  opacity: 0.55;
-  background: var(--bg);
-  border-color: var(--border);
+  opacity: 0.8;
+  background: var(--green-soft);
+  border-color: rgba(0, 230, 118, 0.35);
   box-shadow: none;
 }
 .dl-banner.done .dl-banner-tag {
-  background: var(--border);
-  color: var(--text-3);
+  background: rgba(0, 230, 118, 0.15);
+  color: var(--green-dark);
 }
 .dl-banner.done .dl-banner-title {
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
-  color: var(--text-3);
+  color: var(--green-dark);
 }
 .dl-banner.done .dl-banner-due {
-  color: var(--text-3);
+  color: var(--green-dark);
 }
 .dl-banner.notdone {
   background: var(--red-soft);
-  border-color: rgba(214, 69, 69, 0.32);
+  border-color: rgba(255, 23, 68, 0.32);
   box-shadow: none;
 }
 .dl-banner.notdone .dl-banner-tag {
-  background: rgba(214, 69, 69, 0.12);
-  color: var(--red);
+  background: rgba(255, 23, 68, 0.12);
+  color: var(--red-dark);
 }
 .dl-banner.notdone .dl-banner-title {
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
-  color: var(--red);
+  color: var(--red-dark);
 }
 .dl-banner.notdone .dl-banner-due {
-  color: var(--red);
+  color: var(--red-dark);
   font-weight: 600;
 }
 .dl-banner-notdone {

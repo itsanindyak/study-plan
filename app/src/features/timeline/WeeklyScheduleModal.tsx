@@ -3,7 +3,7 @@ import { useSessionStore } from '@/store/useSessionStore';
 import { addDays, dateKey, DAYS_SHORT, MONTHS, isToday } from '@/lib/date';
 import { assignLanes } from '@/lib/lanes';
 import { timeToMin, minToTime, fmtTime12 } from '@/lib/time';
-import { shade } from '@/lib/color';
+import { statusGradient } from '@/lib/color';
 import type { Session } from '@/types';
 
 const TL_START = 6;
@@ -130,7 +130,7 @@ export function WeeklyScheduleModal({
                     const blockStyle: CSSProperties = {
                       top: `${top}px`,
                       height: `${height}px`,
-                      background: `linear-gradient(135deg, ${session.color}, ${shade(session.color, -18)})`,
+                      background: statusGradient(session.color, session.status),
                     };
 
                     if (count > 1) {

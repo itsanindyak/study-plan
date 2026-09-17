@@ -49,5 +49,14 @@ export function normalizeDeadline(
 ): Deadline | null {
   if (!raw || typeof raw !== 'object') return null;
   const { done: _legacyDone, ...rest } = raw;
-  return { ...(rest as Deadline), status: normalizeStatus(raw) };
+  const d = { ...(rest as Deadline), status: normalizeStatus(raw) };
+  // legacy records have no updatedAt — fall back to the best timestamp we have
+  if (!Number.isFinite(d.updatedAt)) {
+    d.updatedAt = Number.isFinite(d.completedAt)
+      ? d.completedAt
+      : Number.isFinite(d.createdAt)
+        ? d.createdAt
+        : Date.now();
+  }
+  return d;
 }

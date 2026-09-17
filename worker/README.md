@@ -136,13 +136,16 @@ Should return `{"ok":true,"ts":...}`.
 3. Paste:
    - **Worker URL:** `https://study-plan.YOUR-SUBDOMAIN.workers.dev`
    - **Secret token:** the random string you set
-4. Click **Test connection** → "connection works ✓"
-5. Click **Save & sync** → "synced from cloud ✓"
+4. Click **test** → "connection works ✓"
+5. Click **connect** → "connected ✓"
 
-The sync pill (top right) will go green and show `synced`. From now on:
+The sync pill (top right) goes green and shows `synced`. From now on:
 - Every change is saved locally AND pushed to KV
-- Opening the page on another device fetches the latest data
-- The Worker is the source of truth; localStorage is the offline cache
+- Opening the page re-reads KV behind a loading gate before anything is shown
+- A device connecting for the first time with data of its own, against an empty account, uploads
+  that data rather than being wiped by the empty cloud
+- The Worker is the source of truth; localStorage is the offline cache, and the app says so when
+  it is serving you that cache
 
 ## Local development
 

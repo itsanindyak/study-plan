@@ -34,6 +34,7 @@ export const useDeadlineStore = create<DeadlineState>()(
           source: 'manual',
           status: 'pending',
           createdAt: Date.now(),
+          updatedAt: Date.now(),
         };
         set((s) => ({ deadlines: [...s.deadlines, d] }));
         return d;
@@ -47,7 +48,12 @@ export const useDeadlineStore = create<DeadlineState>()(
           return {
             deadlines: s.deadlines.map((d) =>
               d.id === id
-                ? { ...d, status, completedAt: status === 'done' ? Date.now() : undefined }
+                ? {
+                    ...d,
+                    status,
+                    completedAt: status === 'done' ? Date.now() : undefined,
+                    updatedAt: Date.now(),
+                  }
                 : d,
             ),
           };
