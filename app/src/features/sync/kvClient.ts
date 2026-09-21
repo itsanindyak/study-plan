@@ -2,7 +2,7 @@
 // token pulled from useSettingsStore. Returns `null` on 404/204 so callers
 // can treat "no data" as a normal case.
 
-import type { CloudConfig, DateKey, Deadline, Session, SessionsByDate } from '@/types';
+import type { CloudConfig, DateKey, Deadline, Session, SessionsByDate, Subject } from '@/types';
 
 class HttpError extends Error {
   constructor(public status: number, body: string) {
@@ -79,6 +79,30 @@ export const kvClient = {
 
   async deleteDeadline(cfg: CloudConfig, id: string): Promise<void> {
     await request(cfg, `/api/deadlines/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
+  async getSubjects(cfg: CloudConfig): Promise<Subject[] | null> {
+    const res = await request<{ items: Subject[]; updatedAt: number }>(cfg, '/api/subjects');
+    return res?.items ?? null;
+  },
+
+  // LWW on updatedAt; older write returns { ok:false, stale:true, item }.
+  async putSubject(
+    cfg: CloudConfig,
+    s: Subject,
+  ): Promise<{ ok: boolean; stale?: boolean } | null> {
+    return request<{ ok: boolean; stale?: boolean }>(
+      cfg,
+      `/api/subjects/${encodeURIComponent(s.id)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(s),
+      },
+    );
+  },
+
+  async deleteSubject(cfg: CloudConfig, id: string): Promise<void> {
+    await request(cfg, `/api/subjects/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
 };
 

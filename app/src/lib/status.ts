@@ -1,4 +1,4 @@
-import type { Deadline, Session, TaskStatus } from '@/types';
+import type { Deadline, Session, Subject, TaskStatus } from '@/types';
 
 // legacy records (localStorage / KV written before the tri-state change)
 // carry `done: boolean` instead of `status`. Normalization lives here so
@@ -59,4 +59,19 @@ export function normalizeDeadline(
         : Date.now();
   }
   return d;
+}
+
+export function normalizeSubject(raw: Partial<Subject> | null | undefined): Subject | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.id !== 'string' || !raw.id) return null;
+  if (typeof raw.name !== 'string' || !raw.name.trim()) return null;
+  if (typeof raw.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(raw.color)) return null;
+  const createdAt = Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now();
+  return {
+    id: raw.id,
+    name: raw.name.trim(),
+    color: raw.color,
+    createdAt,
+    updatedAt: Number.isFinite(Number(raw.updatedAt)) ? Number(raw.updatedAt) : createdAt,
+  };
 }

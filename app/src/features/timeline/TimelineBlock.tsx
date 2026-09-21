@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { timeToMin, minToTime, fmtTime12 } from '@/lib/time';
 import { statusGradient } from '@/lib/color';
+import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import type { Session } from '@/types';
 
 export function TimelineBlock({
@@ -24,11 +25,15 @@ export function TimelineBlock({
   const height = Math.max(32, (dur / 60) * hourH - 4);
   const compact = height < 50;
   const endM = startM + dur;
+  // resolve the catalog color so a recolor in settings updates this block
+  // instantly; fall back to whatever color the session was stamped with
+  const colorMap = useSubjectColorMap();
+  const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
 
   const style: CSSProperties = {
     top: `${top}px`,
     height: `${height}px`,
-    background: statusGradient(session.color, session.status),
+    background: statusGradient(color, session.status),
   };
   if (count > 1) {
     const leftPct = (lane / count) * 100;

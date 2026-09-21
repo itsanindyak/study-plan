@@ -2,14 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { DateKey, Session, SessionsByDate, TaskStatus } from '@/types';
 import { newId } from '@/lib/id';
-import { makeColorPicker } from '@/lib/color';
 import { addDays, dateKey } from '@/lib/date';
 import { pinnedDates } from '@/lib/cachePins';
 import { normalizeSession } from '@/lib/status';
+import { suggestColor } from '@/lib/subjects';
+import { useSubjectStore } from '@/store/useSubjectStore';
 
 interface SessionState {
   sessions: SessionsByDate;
-  subjectColors: Record<string, string>;
 
   // selectors
   getByDate: (date: DateKey) => Session[];
@@ -17,7 +17,7 @@ interface SessionState {
   // actions
   add: (
     date: DateKey,
-    input: { subject: string; topic: string; time: string; duration: number },
+    input: { subject: string; topic: string; time: string; duration: number; color?: string },
   ) => Session;
   setStatus: (
     date: DateKey,
@@ -29,7 +29,7 @@ interface SessionState {
   update: (
     date: DateKey,
     id: string,
-    input: { subject: string; topic: string; time: string; duration: number },
+    input: { subject: string; topic: string; time: string; duration: number; color?: string },
   ) => void;
   replaceForDate: (date: DateKey, list: Session[]) => void;
 
@@ -37,13 +37,20 @@ interface SessionState {
   hydrateAll: (cloud: SessionsByDate) => void;
 }
 
-const colorPicker = makeColorPicker();
-
 // localStorage keeps only recent days; the database keeps everything and older
 // days are fetched on demand. Every persist writes one JSON string for the
 // whole slice, so without a window each edit re-serialises the user's entire
 // history and the ~5MB quota creeps closer.
 export const CACHE_WINDOW_DAYS = 90;
+
+// The worker stores each day sorted by start time, but a locally added row
+// lands at the end until the next pull, which made the list look unsorted.
+// Keep that invariant in the store so every consumer sees one order.
+// Array#sort is stable, so sessions sharing a start time keep the order they
+// were created in.
+function byStartTime(list: Session[]): Session[] {
+  return [...list].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+}
 
 function cacheWindow(sessions: SessionsByDate): SessionsByDate {
   const cutoff = dateKey(addDays(new Date(), -CACHE_WINDOW_DAYS));
@@ -59,12 +66,16 @@ export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
       sessions: {},
-      subjectColors: {},
 
       getByDate: (date) => get().sessions[date] ?? [],
 
       add: (date, input) => {
-        const color = colorPicker.get(input.subject);
+        // Caller passes the catalog color it already knows; otherwise we
+        // pull one from the palette. Sessions always store a concrete color
+        // so a session can still render even if the catalog is empty
+        // (bootstrapping) or the subject was later deleted.
+        const color =
+          input.color ?? suggestColor(useSubjectStore.getState().subjects);
         const session: Session = {
           id: newId(),
           subject: input.subject,
@@ -78,7 +89,7 @@ export const useSessionStore = create<SessionState>()(
         set((s) => ({
           sessions: {
             ...s.sessions,
-            [date]: [...(s.sessions[date] ?? []), session],
+            [date]: byStartTime([...(s.sessions[date] ?? []), session]),
           },
         }));
         return session;
@@ -116,22 +127,26 @@ export const useSessionStore = create<SessionState>()(
         set((s) => {
           const list = s.sessions[date];
           if (!list) return s;
-          const color = colorPicker.get(input.subject);
+          const color =
+            input.color ?? suggestColor(useSubjectStore.getState().subjects);
           return {
             sessions: {
               ...s.sessions,
-              [date]: list.map((x) =>
-                x.id === id
-                  ? {
-                      ...x,
-                      subject: input.subject,
-                      topic: input.topic,
-                      time: input.time,
-                      duration: input.duration,
-                      color,
-                      updatedAt: Date.now(),
-                    }
-                  : x,
+              // editing the start time can move the row, so re-sort
+              [date]: byStartTime(
+                list.map((x) =>
+                  x.id === id
+                    ? {
+                        ...x,
+                        subject: input.subject,
+                        topic: input.topic,
+                        time: input.time,
+                        duration: input.duration,
+                        color,
+                        updatedAt: Date.now(),
+                      }
+                    : x,
+                ),
               ),
             },
           };
@@ -152,33 +167,34 @@ export const useSessionStore = create<SessionState>()(
         set((s) => {
           const sessions = { ...s.sessions };
           if (list.length === 0) delete sessions[date];
-          else sessions[date] = list;
+          else sessions[date] = byStartTime(list);
           return { sessions };
         }),
 
       hydrateAll: (cloud) => {
         const sessions: SessionsByDate = {};
         for (const [date, list] of Object.entries(cloud ?? {})) {
-          sessions[date] = (list ?? [])
-            .map(normalizeSession)
-            .filter((s): s is Session => s !== null);
+          sessions[date] = byStartTime(
+            (list ?? []).map(normalizeSession).filter((s): s is Session => s !== null),
+          );
         }
         set({ sessions });
       },
     }),
     {
       name: 'studyplan_sessions',
-      partialize: (s) => ({ sessions: cacheWindow(s.sessions), subjectColors: s.subjectColors }),
+      partialize: (s) => ({ sessions: cacheWindow(s.sessions) }),
       // migrate legacy `done: boolean` records out of localStorage on rehydrate
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SessionState>;
         const sessions: SessionsByDate = {};
         for (const [date, list] of Object.entries(p.sessions ?? {})) {
-          sessions[date] = (list ?? [])
-            .map(normalizeSession)
-            .filter((s): s is Session => s !== null);
+          // a cache written before the sort invariant existed gets ordered here
+          sessions[date] = byStartTime(
+            (list ?? []).map(normalizeSession).filter((s): s is Session => s !== null),
+          );
         }
-        return { ...current, sessions, subjectColors: p.subjectColors ?? {} };
+        return { ...current, sessions };
       },
     },
   ),

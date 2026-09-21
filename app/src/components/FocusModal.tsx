@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { todayKey } from '@/lib/date';
 import { HeaderLeft } from './HeaderLeft';
+import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import type { Session } from '@/types';
 
 function FocusBackground() {
@@ -78,6 +79,8 @@ type Phase = 'active' | 'celebrating';
 export function FocusModal({ onClose }: { onClose: () => void }) {
   const setStatus = useSessionStore((s) => s.setStatus);
   const todaySessions = useSessionStore((s) => s.sessions[todayKey()] ?? []);
+  // one subscription shared across the active and celebration states
+  const colorMap = useSubjectColorMap();
 
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [totalSeconds, setTotalSeconds] = useState(0);
@@ -234,6 +237,7 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
   }
 
   // ─────── active focus state ───────
+  const color = colorMap.get(normalizeName(activeSession.subject)) ?? activeSession.color;
   const progressPct = totalSeconds > 0 ? (timeRemaining / totalSeconds) * 100 : 0;
   const mins = Math.floor(timeRemaining / 60);
   const secs = timeRemaining % 60;
@@ -283,7 +287,7 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
           <div className="focus-subject-row">
             <span
               className="focus-subject-dot"
-              style={{ background: activeSession.color }}
+              style={{ background: color }}
             />
             <span className="focus-subject-name">{activeSession.subject}</span>
           </div>
@@ -312,7 +316,7 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
             className="focus-progress-fill"
             style={{
               width: `${progressPct}%`,
-              background: `linear-gradient(90deg, ${activeSession.color}, #fff)`,
+              background: `linear-gradient(90deg, ${color}, #fff)`,
             }}
           />
         </div>
@@ -483,6 +487,8 @@ function Celebration({
   onBack: () => void;
   onClose: () => void;
 }) {
+  const colorMap = useSubjectColorMap();
+  const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
   const sparks = useMemo(
     () =>
       Array.from({ length: 14 }, (_, i) => ({
@@ -532,7 +538,7 @@ function Celebration({
         <div className="focus-card focus-card-celebrate">
           <div className="focus-card-glow" />
           <div className="focus-card-inner focus-celebrate-inner">
-            <div className="focus-checkwrap" style={{ background: session.color }}>
+            <div className="focus-checkwrap" style={{ background: color }}>
               {sparks.map((s) => (
                 <span
                   key={s.i}
@@ -540,7 +546,7 @@ function Celebration({
                   style={{
                     transform: `rotate(${s.angle}deg) translateY(-44px)`,
                     animationDelay: `${s.delay}s`,
-                    background: session.color,
+                    background: color,
                   }}
                 />
               ))}
@@ -560,7 +566,7 @@ function Celebration({
 
             <span
               className="focus-subject-tag"
-              style={{ borderLeftColor: session.color }}
+              style={{ borderLeftColor: color }}
             >
               {session.subject}
             </span>

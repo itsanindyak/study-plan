@@ -28,6 +28,14 @@ export interface Deadline {
   updatedAt?: number; // ms epoch, bumped on every edit — used for conflict resolution
 }
 
+export interface Subject {
+  id: string;
+  name: string;
+  color: string; // '#RRGGBB'
+  createdAt: number; // ms epoch
+  updatedAt: number; // ms epoch — bumped on every edit; drives last-write-wins
+}
+
 export type SyncState = 'offline' | 'syncing' | 'synced' | 'error';
 
 export interface CloudConfig {

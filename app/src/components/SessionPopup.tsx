@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { fmtTime12, minToTime, timeToMin, fmtDuration } from '@/lib/time';
 import { statusGradient } from '@/lib/color';
+import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
+import { SubjectPicker } from '@/features/sessions/SubjectPicker';
 import { nextStatus, STATUS_LABEL } from '@/lib/status';
 import type { Session } from '@/types';
 
@@ -18,6 +20,8 @@ export function SessionPopup({
   const setStatus = useSessionStore((s) => s.setStatus);
   const remove = useSessionStore((s) => s.remove);
   const update = useSessionStore((s) => s.update);
+  const colorMap = useSubjectColorMap();
+  const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
 
   const [isEditing, setIsEditing] = useState(false);
   const [subject, setSubject] = useState(session.subject);
@@ -125,7 +129,7 @@ export function SessionPopup({
         <div className="popup-head">
           <div
             className="popup-swatch"
-            style={{ background: statusGradient(session.color, session.status) }}
+            style={{ background: statusGradient(color, session.status) }}
           />
           {!isEditing ? (
             <div className="popup-title">
@@ -136,13 +140,7 @@ export function SessionPopup({
             <div className="popup-title" style={{ marginRight: '0.5rem' }}>
               <div className="popup-edit-field">
                 <label>subject</label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="popup-input"
-                  required
-                />
+                <SubjectPicker value={subject} onChange={setSubject} />
               </div>
               <div className="popup-edit-field" style={{ marginBottom: 0 }}>
                 <label>topic</label>
@@ -178,8 +176,8 @@ export function SessionPopup({
               <span className="pr-value">{STATUS_LABEL[session.status]}</span>
             </div>
             <div className="popup-hex">
-              <div className="ph-dot" style={{ background: session.color }} />
-              <span>{session.color.toUpperCase()}</span>
+              <div className="ph-dot" style={{ background: color }} />
+              <span>{color.toUpperCase()}</span>
             </div>
             <div className="popup-actions">
               <button

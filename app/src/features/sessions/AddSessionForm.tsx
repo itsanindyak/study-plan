@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
+import { SubjectPicker } from './SubjectPicker';
 import { timeToMin } from '@/lib/time';
 
 export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
@@ -75,13 +76,7 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
       <div className="add-form-row">
         <div className="field field-subject">
           <label>subject</label>
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="e.g. mathematics"
-            required
-          />
+          <SubjectPicker value={subject} onChange={setSubject} />
         </div>
         <div className="field field-topic">
           <label>topic</label>

@@ -14,7 +14,8 @@ worker/
     ├── index.js          # main fetch handler + route dispatch
     ├── shared.js         # CORS, auth, response, KV keys, TTL, sanitizers
     ├── sessions.js       # session route handlers
-    └── deadlines.js      # deadline route handlers
+    ├── deadlines.js      # deadline route handlers
+    └── subjects.js       # subject catalog route handlers
 ```
 
 ## API
@@ -42,6 +43,24 @@ All endpoints require `Authorization: Bearer <SECRET_TOKEN>`. CORS is allowlist-
 | `GET`    | `/api/deadlines`      | —                                                               | `{ items: [...], updatedAt }` |
 | `PUT`    | `/api/deadlines/:id`  | `{ id, title, dueDate, source, done, createdAt }`               | `{ ok, expiresAt }`           |
 | `DELETE` | `/api/deadlines/:id`  | —                                                               | `{ ok }`                      |
+
+### Subjects — one KV key per id, the catalog (no TTL)
+
+`subject:{id}` → `{ id, name, color, createdAt, updatedAt }`
+
+The subject catalog is shared across sessions on every day. Sessions store the
+subject *name* (not an id), and their color is resolved at render time from the
+catalog — so recoloring a subject updates every block instantly with no writes.
+Renames only affect future sessions; deleting a subject leaves existing sessions
+unaffected (they keep their stored color).
+
+| Method   | Path                  | Body                                            | Returns                                          |
+| -------- | --------------------- | ----------------------------------------------- | ------------------------------------------------ |
+| `GET`    | `/api/subjects`       | —                                               | `{ items: [...], updatedAt }`                    |
+| `PUT`    | `/api/subjects/:id`   | `{ id, name, color, createdAt, updatedAt }`     | `{ ok }` or `{ ok: false, stale: true, item }`   |
+| `DELETE` | `/api/subjects/:id`   | —                                               | `{ ok }`                                         |
+
+The client enforces case-insensitive unique names. The server does not (single-user, no KV name index).
 
 ### Other
 

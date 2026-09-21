@@ -164,6 +164,47 @@ so check the response body if you need to know which copy won.
 
 ---
 
+### Subjects — one KV key per subject, a long-lived catalog
+
+**Key shape:** `subject:{id}` → bare object. **No KV TTL** — subjects are a
+catalog that survives across all days, so unlike deadlines they don't expire.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/subjects` | — | `{ items: [...], updatedAt }` |
+| PUT | `/api/subjects/:id` | `{ id, name, color, createdAt, updatedAt }` | `{ ok }` or `{ ok: false, stale: true, item }` |
+| DELETE | `/api/subjects/:id` | — | `{ ok }` |
+
+#### A subject object
+
+```json
+{
+  "id":        "k8m2p4qr99z0a",
+  "name":      "Mathematics",
+  "color":     "#6366f1",
+  "createdAt": 1717770000000,
+  "updatedAt": 1717770000000
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | string | Client-generated. URL's `:id` wins if body's `id` differs. |
+| `name` | string | Non-empty after trim. The client enforces case-insensitive uniqueness; the server does not (it's a single-user planner, the KV namespace has no name index). |
+| `color` | string | 6-digit hex (`#RRGGBB`). Anything else falls back to `#6366f1`. |
+| `createdAt` | number | **Unix ms.** Set once on insert. |
+| `updatedAt` | number | **Unix ms.** Bumped on every edit. Drives last-write-wins. |
+
+**PUT is last-write-wins per item**, identical to deadlines: an older write
+returns **200** `{ ok: false, stale: true, item }` with the stored winner.
+
+**Sessions do NOT reference subjects by id.** Each session stores the subject
+*name* text in its own row, and the *color* is resolved at render time from the
+catalog (falling back to the session's stored color). Renaming a subject therefore
+only affects future sessions; recoloring propagates everywhere with zero writes.
+
+---
+
 ## 4. Error responses (all the frontend ever needs to know)
 
 | Status | When | Body | Frontend does |
@@ -265,6 +306,19 @@ curl -sS -H "Authorization: Bearer $TOKEN" $URL/api/sessions/$TODAY
 
 # delete the day
 curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" $URL/api/sessions/$TODAY
+
+# list subjects
+curl -sS -H "Authorization: Bearer $TOKEN" $URL/api/subjects
+
+# add or recolor a subject
+curl -sS -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"subj1","name":"Mathematics","color":"#6366f1","createdAt":1717770000000,"updatedAt":1717770000000}' \
+  $URL/api/subjects/subj1
+
+# remove a subject
+curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" $URL/api/subjects/subj1
 ```
 
 Expected: 200s and `{"ok":true}` or the data you PUT. The `-sS` flag silences the progress bar but still prints errors.
@@ -276,8 +330,8 @@ Expected: 200s and `{"ok":true}` or the data you PUT. The `-sS` flag silences th
 You don't need to read the worker source to call it. Just:
 
 - **Auth header on every request:** `Authorization: Bearer <user's token>`
-- **9 endpoints** in the two tables above
-- **Five data shapes:** `Session`, `Deadline`, `DateList`, `SessionAll`, `DeadlineList`
+- **12 endpoints** in the three tables above
+- **Six data shapes:** `Session`, `Deadline`, `Subject`, `DateList`, `SessionAll`, `DeadlineList` (subject list uses the `SubjectList` envelope)
 - **All times are Unix milliseconds except `expiresAt` (seconds)** and `dueDate` ("YYYY-MM-DD" string)
 - **All ids are client-generated** — generate once, never change
 - **PUT replaces the day, it doesn't merge** — send the full list. The client merges by `updatedAt`

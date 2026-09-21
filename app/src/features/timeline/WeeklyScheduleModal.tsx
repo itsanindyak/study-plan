@@ -1,9 +1,13 @@
-import { useEffect, useMemo, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
+import { useDeadlineStore } from '@/store/useDeadlineStore';
 import { addDays, dateKey, DAYS_SHORT, MONTHS, isToday } from '@/lib/date';
 import { assignLanes } from '@/lib/lanes';
 import { timeToMin, minToTime, fmtTime12 } from '@/lib/time';
 import { statusGradient } from '@/lib/color';
+import { STATUS_RANK } from '@/lib/status';
+import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
+import { DeadlineBanner } from '@/features/sessions/DeadlineBanner';
 import type { Session } from '@/types';
 
 const TL_START = 6;
@@ -22,15 +26,64 @@ export function WeeklyScheduleModal({
   onOpenSession: (dateKey: string, session: Session) => void;
 }) {
   const sessions = useSessionStore((s) => s.sessions);
+  const deadlines = useDeadlineStore((s) => s.deadlines);
+  // one subscription for every block on the week; a recolor rerenders all of them
+  const colorMap = useSubjectColorMap();
 
-  // Close on Escape key press
+  // Date-keyed buckets so each day header can show its own count and popup.
+  const deadlinesByDay = useMemo(() => {
+    const map = new Map<string, typeof deadlines>();
+    for (const d of deadlines) {
+      const list = map.get(d.dueDate);
+      if (list) list.push(d);
+      else map.set(d.dueDate, [d]);
+    }
+    // pending first, resolved last — same ordering as SessionList
+    for (const list of map.values()) {
+      list.sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status]);
+    }
+    return map;
+  }, [deadlines]);
+
+  // Fixed-positioned popup rather than an absolutely-positioned one: the grid
+  // lives inside a scroll container, so a normal dropdown would be clipped.
+  const [deadlinePop, setDeadlinePop] = useState<{ date: string; x: number; y: number } | null>(
+    null,
+  );
+  const popRef = useRef<HTMLDivElement | null>(null);
+
+  // Escape closes the deadline popup first, then the whole modal
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      if (deadlinePop) setDeadlinePop(null);
+      else onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, deadlinePop]);
+
+  // Outside click closes the deadline popup
+  useEffect(() => {
+    if (!deadlinePop) return;
+    const onMouse = (e: MouseEvent) => {
+      if (!popRef.current?.contains(e.target as Node)) setDeadlinePop(null);
+    };
+    document.addEventListener('mousedown', onMouse);
+    return () => document.removeEventListener('mousedown', onMouse);
+  }, [deadlinePop]);
+
+  const toggleDeadlinePop = (date: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (deadlinePop?.date === date) {
+      setDeadlinePop(null);
+      return;
+    }
+    const r = e.currentTarget.getBoundingClientRect();
+    // keep the panel on screen when the day is near the right edge
+    const width = 288;
+    const x = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    setDeadlinePop({ date, x, y: r.bottom + 6 });
+  };
 
   const daysOfCurrentWeek = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -72,10 +125,29 @@ export function WeeklyScheduleModal({
             <div className="weekly-time-header-cell" />
             {daysOfCurrentWeek.map((day, idx) => {
               const isDayToday = isToday(day);
+              const key = dateKey(day);
+              const dayDeadlines = deadlinesByDay.get(key) ?? [];
               return (
                 <div key={idx} className={`weekly-day-header-cell ${isDayToday ? 'today' : ''}`}>
                   <span className="wdh-name">{DAYS_SHORT[idx]}</span>
                   <span className="wdh-date">{day.getDate()}</span>
+                  {dayDeadlines.length > 0 && (
+                    <button
+                      type="button"
+                      className={
+                        'wdh-deadlines' +
+                        (deadlinePop?.date === key ? ' open' : '') +
+                        (dayDeadlines.some((d) => d.status === 'pending') ? ' has-pending' : '')
+                      }
+                      onClick={(e) => toggleDeadlinePop(key, e)}
+                      aria-expanded={deadlinePop?.date === key}
+                      aria-label={`${dayDeadlines.length} deadline${dayDeadlines.length === 1 ? '' : 's'}`}
+                      title={`${dayDeadlines.length} deadline${dayDeadlines.length === 1 ? '' : 's'}`}
+                    >
+                      <span className="wdh-dl-dot" />
+                      {dayDeadlines.length}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -126,11 +198,12 @@ export function WeeklyScheduleModal({
                     const dur = parseInt(String(session.duration)) || 60;
                     const top = ((startM - TL_START * 60) / 60) * HOUR_H;
                     const height = Math.max(26, (dur / 60) * HOUR_H - 3);
+                    const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
 
                     const blockStyle: CSSProperties = {
                       top: `${top}px`,
                       height: `${height}px`,
-                      background: statusGradient(session.color, session.status),
+                      background: statusGradient(color, session.status),
                     };
 
                     if (count > 1) {
@@ -167,6 +240,33 @@ export function WeeklyScheduleModal({
           </div>
         </div>
       </div>
+
+      {deadlinePop && (
+        <div
+          className="deadline-pop"
+          ref={popRef}
+          style={{ left: deadlinePop.x, top: deadlinePop.y }}
+          role="dialog"
+          aria-label="deadlines for the day"
+        >
+          <div className="deadline-pop-head">
+            <span className="deadline-pop-title">deadlines</span>
+            <button
+              type="button"
+              className="deadline-pop-close"
+              onClick={() => setDeadlinePop(null)}
+              aria-label="close"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="deadline-pop-list">
+            {(deadlinesByDay.get(deadlinePop.date) ?? []).map((d) => (
+              <DeadlineBanner key={d.id} deadline={d} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

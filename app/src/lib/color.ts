@@ -18,19 +18,21 @@ export function statusGradient(color: string, status: TaskStatus): string {
   return `linear-gradient(135deg, ${color}, ${shade(color, -18)})`;
 }
 
+// 11 colors, biased toward the project's warm coral/amber theme so subject
+// swatches don't clash with the accent (#ff5a3c), done (#00e676), or
+// not-done (#ff1744) palettes. The cool blue/violet/pink anchor the spread.
 export const PALETTE = [
-  '#6366f1',
-  '#ec4899',
-  '#10b981',
-  '#f59e0b',
-  '#8b5cf6',
-  '#06b6d4',
-  '#f43f5e',
-  '#14b8a6',
-  '#ef4444',
-  '#84cc16',
-  '#3b82f6',
-  '#a855f7',
+  '#ff5a3c', // coral (project accent)
+  '#f59e0b', // amber
+  '#fb923c', // warm orange
+  '#facc15', // yellow
+  '#84cc16', // lime
+  '#10b981', // emerald
+  '#14b8a6', // teal
+  '#3b82f6', // blue
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#ef4444', // red
 ];
 
 /** lighten (positive) or darken (negative) a hex color by `percent` of 255. */

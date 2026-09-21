@@ -1,7 +1,8 @@
 // Cloudflare Worker — Study Plan backend.
 // Multi-key KV layout:
 //   session:YYYY-MM-DD  →  { sessions: [ {id, time, duration, subject, topic, color, status, updatedAt} ] }
-//   deadline:{id}       →  { id, title, dueDate, source, status, createdAt }   (with KV TTL)
+//   deadline:{id}       →  { id, title, dueDate, source, status, createdAt, updatedAt }   (with KV TTL)
+//   subject:{id}        →  { id, name, color, createdAt, updatedAt }   (subject catalog, no TTL)
 // status is 'pending' | 'done' | 'notdone' (legacy rows with done:boolean are normalized on read).
 //
 // Auth: Bearer token from env.SECRET_TOKEN.
@@ -27,6 +28,11 @@ import {
   putDeadline,
   deleteDeadline,
 } from "./deadlines.js";
+import {
+  listSubjects,
+  putSubject,
+  deleteSubject,
+} from "./subjects.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -133,6 +139,25 @@ export default {
         return putDeadline(id, body, env, cors);
       }
       if (request.method === "DELETE") return deleteDeadline(id, env, cors);
+      return errResponse(405, "Method not allowed", cors);
+    }
+
+    if (path === "/api/subjects") {
+      if (request.method !== "GET") return errResponse(405, "Method not allowed", cors);
+      return listSubjects(env, cors);
+    }
+
+    if (path.startsWith("/api/subjects/")) {
+      const id = safeDecode(path.slice("/api/subjects/".length));
+      if (id === null) return errResponse(400, "bad path encoding", cors);
+      if (!id) return errResponse(400, "missing id", cors);
+
+      if (request.method === "PUT") {
+        const { body, error } = await readJsonBody(request, cors);
+        if (error) return error;
+        return putSubject(id, body, env, cors);
+      }
+      if (request.method === "DELETE") return deleteSubject(id, env, cors);
       return errResponse(405, "Method not allowed", cors);
     }
 

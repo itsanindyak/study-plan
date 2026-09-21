@@ -19,7 +19,8 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
-import type { Deadline, DateKey, Session, SessionsByDate, SyncState } from '@/types';
+import { useSubjectStore, seedSubjectsFromSessions } from '@/store/useSubjectStore';
+import type { Deadline, DateKey, Session, SessionsByDate, Subject, SyncState } from '@/types';
 import { addDays, dateKey } from '@/lib/date';
 import { pinnedDates } from '@/lib/cachePins';
 import { CACHE_WINDOW_DAYS, useSessionStore } from '@/store/useSessionStore';
@@ -172,13 +173,19 @@ const TOMBSTONE_TTL = 30 * 86_400_000;
 
 const dirtyDates = new Set<string>();
 const dirtyDeadlines = new Map<string, 'put' | 'delete'>();
+const dirtySubjects = new Map<string, 'put' | 'delete'>();
 // date -> (session id -> deletedAt ms)
 const tombstones = new Map<string, Map<string, number>>();
 
 function saveQueue() {
   syncPins();
   try {
-    if (dirtyDates.size === 0 && dirtyDeadlines.size === 0 && tombstones.size === 0) {
+    if (
+      dirtyDates.size === 0 &&
+      dirtyDeadlines.size === 0 &&
+      dirtySubjects.size === 0 &&
+      tombstones.size === 0
+    ) {
       localStorage.removeItem(QUEUE_KEY);
       return;
     }
@@ -191,6 +198,7 @@ function saveQueue() {
       JSON.stringify({
         dates: [...dirtyDates],
         deadlines: [...dirtyDeadlines.entries()],
+        subjects: [...dirtySubjects.entries()],
         tombstones: tomb,
       }),
     );
@@ -206,6 +214,7 @@ function loadQueue() {
       const parsed = JSON.parse(raw) as {
         dates?: unknown;
         deadlines?: unknown;
+        subjects?: unknown;
         tombstones?: unknown;
       };
       if (Array.isArray(parsed.dates)) {
@@ -219,6 +228,17 @@ function loadQueue() {
             (entry[1] === 'put' || entry[1] === 'delete')
           ) {
             dirtyDeadlines.set(entry[0], entry[1]);
+          }
+        }
+      }
+      if (Array.isArray(parsed.subjects)) {
+        for (const entry of parsed.subjects) {
+          if (
+            Array.isArray(entry) &&
+            typeof entry[0] === 'string' &&
+            (entry[1] === 'put' || entry[1] === 'delete')
+          ) {
+            dirtySubjects.set(entry[0], entry[1]);
           }
         }
       }
@@ -347,6 +367,12 @@ function applyTombstones(cloud: SessionsByDate): SessionsByDate {
 loadQueue();
 pruneTombstones();
 syncPins();
+// One-time bootstrap of the subject catalog from whatever's already in the
+// sessions cache, so the Settings tab isn't empty for a returning user. The
+// flag inside the seed function prevents re-seeding an emptied catalog.
+// Fire-and-forget; the diff subscription picks up the seeded entries and
+// the normal flush uploads them.
+void seedSubjectsFromSessions();
 
 // ─────── boot / focus refresh ───────
 let pullPromise: Promise<boolean> | null = null;
@@ -355,7 +381,8 @@ function localHasData(): boolean {
   const sessions = useSessionStore.getState().sessions;
   return (
     Object.values(sessions).some((list) => list.length > 0) ||
-    useDeadlineStore.getState().deadlines.length > 0
+    useDeadlineStore.getState().deadlines.length > 0 ||
+    useSubjectStore.getState().subjects.length > 0
   );
 }
 
@@ -366,10 +393,12 @@ function localHasData(): boolean {
 async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Promise<boolean> {
   const dates = Object.entries(useSessionStore.getState().sessions).filter(([, l]) => l.length > 0);
   const deadlines = useDeadlineStore.getState().deadlines;
+  const subjects = useSubjectStore.getState().subjects;
 
   const results = await Promise.allSettled([
     ...dates.map(([date, list]) => kvClient.putSession(cfg, date, list)),
     ...deadlines.map((d) => kvClient.putDeadline(cfg, d)),
+    ...subjects.map((s) => kvClient.putSubject(cfg, s)),
   ]);
 
   if (results.some((r) => r.status === 'rejected')) {
@@ -377,11 +406,14 @@ async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Pro
     console.warn('adoption push incomplete, queueing for retry');
     for (const [date] of dates) dirtyDates.add(date);
     for (const d of deadlines) dirtyDeadlines.set(d.id, 'put');
+    for (const s of subjects) dirtySubjects.set(s.id, 'put');
     saveQueue();
     scheduleSync();
     return false;
   }
-  console.log(`adopted local data as the initial cloud state: ${dates.length} days, ${deadlines.length} deadlines`);
+  console.log(
+    `adopted local data as the initial cloud state: ${dates.length} days, ${deadlines.length} deadlines, ${subjects.length} subjects`,
+  );
   return true;
 }
 
@@ -393,14 +425,16 @@ async function readCloud(): Promise<boolean> {
   if (!cfg.token) return false;
   try {
     setPill('syncing', 'syncing…');
-    const [rawSessions, cloudDeadlines] = await Promise.all([
+    const [rawSessions, cloudDeadlines, cloudSubjects] = await Promise.all([
       kvClient.getAllSessions(cfg),
       kvClient.getDeadlines(cfg),
+      kvClient.getSubjects(cfg),
     ]);
 
     const cloudEmpty =
       (!rawSessions || Object.keys(rawSessions).length === 0) &&
-      (!cloudDeadlines || cloudDeadlines.length === 0);
+      (!cloudDeadlines || cloudDeadlines.length === 0) &&
+      (!cloudSubjects || cloudSubjects.length === 0);
     if (cloudEmpty && lastSyncAt == null && localHasData()) {
       if (!(await adoptLocalAsCloud(cfg))) {
         dataOrigin = 'cache';
@@ -433,6 +467,17 @@ async function readCloud(): Promise<boolean> {
         // For the replace: take cloud as truth. Any local items missing from
         // cloud are presumed deleted elsewhere.
         useDeadlineStore.getState().replaceAll(cloudDeadlines);
+      }
+      if (cloudSubjects) {
+        // Catalog wins — recolors/renames from another device overwrite local.
+        // Any local subject missing from cloud is dropped locally (a manual
+        // delete that landed somewhere else) and stays in the dirty queue.
+        const local = useSubjectStore.getState().subjects;
+        for (const s of local) {
+          if (!cloudSubjects.some((c) => c.id === s.id)) dirtySubjects.set(s.id, 'delete');
+        }
+        if (dirtySubjects.size) saveQueue();
+        useSubjectStore.getState().replaceAll(cloudSubjects);
       }
     } finally {
       hydrationDepth--;
@@ -618,7 +663,9 @@ function flushDirty(): Promise<void> {
   }
   const token = useSettingsStore.getState().token;
   if (!token) return Promise.resolve();
-  if (dirtyDates.size === 0 && dirtyDeadlines.size === 0) return Promise.resolve();
+  if (dirtyDates.size === 0 && dirtyDeadlines.size === 0 && dirtySubjects.size === 0) {
+    return Promise.resolve();
+  }
 
   flushPromise = (async () => {
     setPill('syncing', 'syncing…');
@@ -629,6 +676,7 @@ function flushDirty(): Promise<void> {
     };
     const dates = [...dirtyDates];
     const dls = [...dirtyDeadlines.entries()];
+    const subs = [...dirtySubjects.entries()];
     let failed = false;
     let authBlocked = false;
     let retryIn = 4_000;
@@ -694,6 +742,30 @@ function flushDirty(): Promise<void> {
       }
     }
 
+    for (const [id, op] of subs) {
+      try {
+        if (op === 'delete') {
+          await kvClient.deleteSubject(cfg, id);
+        } else {
+          const s: Subject | undefined = useSubjectStore
+            .getState()
+            .subjects.find((x) => x.id === id);
+          if (s) {
+            const res = await kvClient.putSubject(cfg, s);
+            if (res?.stale) console.info('subject ' + id + ': server copy is newer, kept it');
+          }
+        }
+        dirtySubjects.delete(id);
+        saveQueue();
+      } catch (err) {
+        console.warn(op + ' subject ' + id + ' failed:', err);
+        if (!lastError) lastError = describeError(err);
+        if (!isRetryable(err)) authBlocked = true;
+        retryIn = Math.max(retryIn, retryDelayFor(err));
+        failed = true;
+      }
+    }
+
     if (failed) {
       // an auth or permission failure needs the user, not another attempt; the
       // queue stays on disk until they fix it or reload
@@ -707,7 +779,7 @@ function flushDirty(): Promise<void> {
       lastSyncAt = Date.now();
       refreshPill();
       // items that were marked dirty while this flush was in flight
-      if (dirtyDates.size || dirtyDeadlines.size) scheduleSync();
+      if (dirtyDates.size || dirtyDeadlines.size || dirtySubjects.size) scheduleSync();
     }
   })().finally(() => {
     flushPromise = null;
@@ -719,6 +791,7 @@ function flushDirty(): Promise<void> {
 // ─────── store subscriptions ───────
 let prevSessionsRef: Record<string, Session[]> = {};
 let prevDeadlinesRef: Deadline[] = [];
+let prevSubjectsRef: Subject[] = [];
 
 function diffSessions(curr: Record<string, Session[]>) {
   const prev = prevSessionsRef;
@@ -756,6 +829,22 @@ function diffDeadlines(curr: Deadline[]) {
   saveQueue();
 }
 
+function diffSubjects(curr: Subject[]) {
+  const prev = prevSubjectsRef;
+  if (curr === prev) return;
+  const prevById = new Map(prev.map((s) => [s.id, s] as const));
+  for (const s of curr) {
+    const before = prevById.get(s.id);
+    if (!before || before !== s) dirtySubjects.set(s.id, 'put');
+  }
+  const currIds = new Set(curr.map((s) => s.id));
+  for (const s of prev) {
+    if (!currIds.has(s.id)) dirtySubjects.set(s.id, 'delete');
+  }
+  prevSubjectsRef = curr;
+  saveQueue();
+}
+
 // ─────── main hook ───────
 export function useCloudSync() {
   const token = useSettingsStore((s) => s.token);
@@ -774,6 +863,7 @@ export function useCloudSync() {
     // seed refs with current state so first change correctly diffs
     prevSessionsRef = useSessionStore.getState().sessions;
     prevDeadlinesRef = useDeadlineStore.getState().deadlines;
+    prevSubjectsRef = useSubjectStore.getState().subjects;
 
     // boot: flush anything pending from a previous session, then make the
     // database authoritative for what the user sees
@@ -798,6 +888,15 @@ export function useCloudSync() {
       diffDeadlines(state.deadlines);
       if (dirtyDeadlines.size) scheduleSync();
     });
+    const unsubSubjects = useSubjectStore.subscribe((state) => {
+      refreshHasCache();
+      if (isHydrating()) {
+        prevSubjectsRef = state.subjects;
+        return;
+      }
+      diffSubjects(state.subjects);
+      if (dirtySubjects.size) scheduleSync();
+    });
 
     // coming back to the tab: push pending edits, then re-pull so data
     // created elsewhere (another device, or the ingest API) shows up.
@@ -813,6 +912,7 @@ export function useCloudSync() {
     return () => {
       unsubSessions();
       unsubDeadlines();
+      unsubSubjects();
       document.removeEventListener('visibilitychange', onVisible);
       clearInterval(pillTick);
       if (syncTimer) {

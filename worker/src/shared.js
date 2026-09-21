@@ -2,6 +2,7 @@
 
 export const SESSION_PREFIX = "session:";
 export const DEADLINE_PREFIX = "deadline:";
+export const SUBJECT_PREFIX = "subject:";
 export const MAX_BODY_BYTES = 256 * 1024; // 256 KB per request — plenty for a personal planner
 
 // ─── CORS / origin ────────────────────────────────────────────
@@ -66,6 +67,9 @@ export function sessionKey(date) {
 }
 export function deadlineKey(id) {
   return DEADLINE_PREFIX + id;
+}
+export function subjectKey(id) {
+  return SUBJECT_PREFIX + id;
 }
 export function dateFromSessionKey(k) {
   return k.slice(SESSION_PREFIX.length);
@@ -162,5 +166,25 @@ export function sanitizeDeadline(d) {
     createdAt,
     // last-write-wins marker; legacy rows have none, so fall back to createdAt
     updatedAt: Number.isFinite(+d.updatedAt) ? +d.updatedAt : createdAt,
+  };
+}
+
+// Whitelist what we actually persist so callers can't slip in extra fields.
+// name is the catalog key (the worker does not enforce uniqueness — the client
+// does). color must be a 6-digit hex so the client can shade it for pastels;
+// garbage falls back to a sane default rather than getting rejected.
+export function sanitizeSubject(s) {
+  if (!s || typeof s !== "object") return null;
+  if (typeof s.name !== "string" || !s.name.trim()) return null;
+  const color =
+    typeof s.color === "string" && /^#[0-9a-fA-F]{6}$/.test(s.color) ? s.color : "#6366f1";
+  const createdAt = Number.isFinite(+s.createdAt) ? +s.createdAt : Date.now();
+  return {
+    id: typeof s.id === "string" && s.id ? s.id : newId(),
+    name: s.name.trim(),
+    color,
+    createdAt,
+    // last-write-wins marker, like deadlines
+    updatedAt: Number.isFinite(+s.updatedAt) ? +s.updatedAt : createdAt,
   };
 }

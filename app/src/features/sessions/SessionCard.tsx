@@ -3,6 +3,7 @@ import { useSessionStore } from '@/store/useSessionStore';
 import { fmtTime12, minToTime, timeToMin } from '@/lib/time';
 import { nextStatus } from '@/lib/status';
 import { statusColor } from '@/lib/color';
+import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import type { Session } from '@/types';
 
 export function SessionCard({
@@ -19,6 +20,8 @@ export function SessionCard({
   const dur = parseInt(String(session.duration)) || 0;
   const startM = timeToMin(session.time);
   const endM = startM + dur;
+  const colorMap = useSubjectColorMap();
+  const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
 
   const className =
     'session' +
@@ -36,7 +39,7 @@ export function SessionCard({
       whileTap={{ scale: 0.99 }}
       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
     >
-      <div className="s-color" style={{ background: statusColor(session.color, session.status) }} />
+      <div className="s-color" style={{ background: statusColor(color, session.status) }} />
       <motion.button
         type="button"
         className={'s-check' + (session.status === 'done' ? ' checked' : '')}
