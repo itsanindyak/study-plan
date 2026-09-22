@@ -46,3 +46,18 @@ export function fmtAgo(ts: number, now = Date.now()): string {
 export function sortByUpdated(notes: readonly Note[]): Note[] {
   return [...notes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
+
+/** Word count for the editor stats + card footers. */
+export function countWords(text: string): number {
+  const t = (text || '').trim();
+  if (!t) return 0;
+  return t.split(/\s+/).length;
+}
+
+/** "1 min read" style estimate at ~200 wpm; empty text → ''. */
+export function readingTime(text: string): string {
+  const w = countWords(text);
+  if (w === 0) return '';
+  const mins = Math.max(1, Math.round(w / 200));
+  return `${mins} min read`;
+}

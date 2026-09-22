@@ -13,6 +13,7 @@ import { RatingPopup } from '@/components/RatingPopup';
 import { SettingsModal } from '@/features/settings/SettingsModal';
 import { NotesPage } from '@/features/notes/NotesPage';
 import { NoteView } from '@/features/notes/NoteView';
+import { NotesFab } from '@/components/NotesFab';
 import { useHashRoute } from '@/lib/useHashRoute';
 import { useCloudSync, useSyncPill, refreshFromCloud, ensureDateLoaded } from '@/features/sync/useCloudSync';
 import { useSessionStore } from '@/store/useSessionStore';
@@ -128,6 +129,7 @@ export function App() {
         ) : (
           <NotesPage onOpenSettings={() => setSettingsOpen(true)} />
         )}
+        {!route.id && <NotesFab mode="new" />}
       </div>
     );
   }
@@ -278,6 +280,8 @@ export function App() {
         onClose={() => setWeeklyOpen(false)}
         onOpenSession={(dateKey, session) => setOpenSession({ date: dateKey, session })}
       />
+
+      <NotesFab mode="open" />
     </div>
   );
 }

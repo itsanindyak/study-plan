@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNoteStore } from '@/store/useNoteStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
-import { deriveTitle, fmtAgo } from '@/lib/notes';
+import { countWords, deriveTitle, fmtAgo, readingTime } from '@/lib/notes';
 import { fetchNoteBody, waitForSaved } from '@/features/sync/useCloudSync';
 import { SyncPill } from '@/components/SyncPill';
 import { goNotes } from '@/lib/useHashRoute';
@@ -160,29 +160,48 @@ export function NoteView({ id, onOpenSettings }: { id: string; onOpenSettings: (
         <SyncPill onClick={onOpenSettings} />
       </header>
 
-      <textarea
-        className="note-editor"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder={loading ? 'reading the note from the cloud…' : 'write anything… then press save'}
-        spellCheck={false}
-      />
+      <div className="note-paper">
+        <textarea
+          className="note-editor"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={loading ? 'reading the note from the cloud…' : 'write anything… then press save'}
+          spellCheck={false}
+        />
 
-      <footer className="note-foot">
-        <span className="note-foot-meta">
-          {note.updatedAt ? `last updated · ${fmtAgo(note.updatedAt, now)}` : 'not saved yet'}
-          {dirty && <span className="note-dirty"> · unsaved changes</span>}
-        </span>
-        <button
-          type="button"
-          className="note-save-btn"
-          onClick={onSave}
-          disabled={!dirty}
-          title="save (Ctrl+S)"
-        >
-          {dirty ? 'save' : 'saved'}
-        </button>
-      </footer>
+        <footer className="note-foot">
+          <span className="note-foot-meta">
+            {(() => {
+              const words = countWords(draft);
+              const read = readingTime(draft);
+              const updated = note.updatedAt
+                ? `updated ${fmtAgo(note.updatedAt, now)}`
+                : 'not saved yet';
+              return (
+                <>
+                  {words > 0 && (
+                    <>
+                      {words} word{words === 1 ? '' : 's'}
+                      {read && ` · ${read}`} ·{' '}
+                    </>
+                  )}
+                  {updated}
+                </>
+              );
+            })()}
+            {dirty && <span className="note-dirty"> · unsaved changes</span>}
+          </span>
+          <button
+            type="button"
+            className="note-save-btn"
+            onClick={onSave}
+            disabled={!dirty}
+            title="save (Ctrl+S)"
+          >
+            {dirty ? 'save' : 'saved'}
+          </button>
+        </footer>
+      </div>
 
       {savePhase !== 'idle' && (
         <div className={'save-toast is-' + savePhase} role="status" aria-live="polite">
