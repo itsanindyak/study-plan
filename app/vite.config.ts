@@ -11,6 +11,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // don't silently drift to 5174 — the worker's CORS allowlist is origin+port
+    // specific, and a drifted port makes every cloud request fail
+    strictPort: true,
   },
   build: {
     outDir: 'dist',

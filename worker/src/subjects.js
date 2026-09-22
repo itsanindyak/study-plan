@@ -8,7 +8,6 @@ import {
   subjectKey,
   listAllKeys,
   sanitizeSubject,
-  normalizeRecord,
   json,
   errResponse,
 } from "./shared.js";
@@ -19,9 +18,10 @@ export async function listSubjects(env, cors) {
   const values = await Promise.all(
     keys.map((k) => env.STUDY_KV.get(k.name, { type: "json" })),
   );
+  // subjects have no tri-state status, so no normalizeRecord here — it would
+  // inject a meaningless `status: "pending"` into the catalog.
   const items = values
     .filter((v) => v != null)
-    .map(normalizeRecord)
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   console.log(`listSubjects: ${items.length} of ${keys.length} keys`);
   return json({ items, updatedAt: Date.now() }, 200, cors);
@@ -43,11 +43,7 @@ export async function putSubject(id, body, env, cors) {
     console.log(
       `putSubject[${id}]: stale write ignored (client=${clean.updatedAt} stored=${existingUpdatedAt})`,
     );
-    return json(
-      { ok: false, stale: true, item: normalizeRecord(existing) },
-      200,
-      cors,
-    );
+    return json({ ok: false, stale: true, item: existing }, 200, cors);
   }
 
   await env.STUDY_KV.put(subjectKey(id), JSON.stringify(clean));

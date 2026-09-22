@@ -2,7 +2,15 @@
 // token pulled from useSettingsStore. Returns `null` on 404/204 so callers
 // can treat "no data" as a normal case.
 
-import type { CloudConfig, DateKey, Deadline, Session, SessionsByDate, Subject } from '@/types';
+import type {
+  CloudConfig,
+  DateKey,
+  Deadline,
+  Note,
+  Session,
+  SessionsByDate,
+  Subject,
+} from '@/types';
 
 class HttpError extends Error {
   constructor(public status: number, body: string) {
@@ -103,6 +111,69 @@ export const kvClient = {
 
   async deleteSubject(cfg: CloudConfig, id: string): Promise<void> {
     await request(cfg, `/api/subjects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
+  async getNotes(cfg: CloudConfig): Promise<Note[] | null> {
+    const res = await request<{ items: Note[]; updatedAt: number }>(cfg, '/api/notes');
+    return res?.items ?? null;
+  },
+
+  // One note's body — opening a note costs a single read. Returns null on 404
+  // (deleted elsewhere or never synced).
+  async getNote(cfg: CloudConfig, id: string, init?: RequestInit): Promise<Note | null> {
+    const res = await request<{ note: Note; updatedAt: number }>(
+      cfg,
+      `/api/notes/${encodeURIComponent(id)}`,
+      init ?? {},
+    );
+    return res?.note ?? null;
+  },
+
+  // LWW on updatedAt; older write returns { ok:false, stale:true, item }.
+  async putNote(
+    cfg: CloudConfig,
+    n: Note,
+  ): Promise<{ ok: boolean; stale?: boolean; item?: Note } | null> {
+    return request<{ ok: boolean; stale?: boolean; item?: Note }>(
+      cfg,
+      `/api/notes/${encodeURIComponent(n.id)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(n),
+      },
+    );
+  },
+
+  async deleteNote(cfg: CloudConfig, id: string): Promise<void> {
+    await request(cfg, `/api/notes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
+  // Whole-plan snapshot in one request (single namespace list server-side).
+  // Returns null on 404 — an older worker without /api/all — and the caller
+  // falls back to the four per-collection requests.
+  // With `since` (the client's last watermark) the server value-reads only
+  // days changed after it and reports deleted days in `removedDates` (absent
+  // entirely on a legacy worker — the caller's cue to do a full merge).
+  async getAll(
+    cfg: CloudConfig,
+    since?: number | null,
+  ): Promise<{
+    sessions: SessionsByDate;
+    deadlines: Deadline[];
+    subjects: Subject[];
+    notes: Note[];
+    removedDates?: string[];
+    updatedAt: number;
+  } | null> {
+    const path = since != null && Number.isFinite(since) ? `/api/all?since=${since}` : '/api/all';
+    return request<{
+      sessions: SessionsByDate;
+      deadlines: Deadline[];
+      subjects: Subject[];
+      notes: Note[];
+      removedDates?: string[];
+      updatedAt: number;
+    }>(cfg, path);
   },
 };
 

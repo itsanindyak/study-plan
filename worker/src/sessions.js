@@ -4,6 +4,8 @@
 import {
   SESSION_PREFIX,
   sessionKey,
+  sessionTombKey,
+  SDEL_TTL_SEC,
   dateFromSessionKey,
   listAllKeys,
   json,
@@ -24,9 +26,11 @@ export async function listSessionDates(env, cors) {
 export async function getAllSessions(env, cors) {
   const keys = await listAllKeys(env, SESSION_PREFIX);
 
-  // fetch all values in parallel
+  // cacheTtl: 60 — buys read latency (hot reads skip central stores), NOT quota:
+  // cached KV reads are still billed. Writes revalidate instantly, so a
+  // written key is always fresh; unwritten keys stay up to 60s stale.
   const values = await Promise.all(
-    keys.map((k) => env.STUDY_KV.get(k.name, { type: "json" }))
+    keys.map((k) => env.STUDY_KV.get(k.name, { type: "json", cacheTtl: 60 }))
   );
 
   const sessions = {};
@@ -44,7 +48,7 @@ export async function getAllSessions(env, cors) {
 
 // GET /api/sessions/:date  →  { sessions: [...], updatedAt }  (404 if no data)
 export async function getSession(date, env, cors) {
-  const raw = await env.STUDY_KV.get(sessionKey(date), { type: "json" });
+  const raw = await env.STUDY_KV.get(sessionKey(date), { type: "json", cacheTtl: 60 });
   if (!raw) return errResponse(404, "no sessions for that date", cors);
   const sessions = (raw.sessions || []).map(normalizeRecord);
   return json({ sessions, updatedAt: Date.now() }, 200, cors);
@@ -75,9 +79,12 @@ export async function putSession(date, body, env, cors) {
     (a.time || "").localeCompare(b.time || "")
   );
 
+  // updatedAt rides in key metadata (free with list) so incremental pulls
+  // (`GET /api/all?since=`) can detect changed days without reading values
   await env.STUDY_KV.put(
     sessionKey(date),
-    JSON.stringify({ sessions: sorted })
+    JSON.stringify({ sessions: sorted }),
+    { metadata: { updatedAt: Date.now() } }
   );
 
   if (dropped > 0) {
@@ -90,8 +97,16 @@ export async function putSession(date, body, env, cors) {
 }
 
 // DELETE /api/sessions/:date  →  { ok }
+// The day key is removed AND a tombstone is written: incremental pulls list
+// the tombstone and report the date in `removedDates` so other devices drop
+// it. Tombstones auto-expire after 30d.
 export async function deleteSession(date, env, cors) {
+  const now = Date.now();
   await env.STUDY_KV.delete(sessionKey(date));
+  await env.STUDY_KV.put(sessionTombKey(date), JSON.stringify({ deleted: true, date }), {
+    metadata: { updatedAt: now },
+    expirationTtl: SDEL_TTL_SEC,
+  });
   console.log(`deleteSession[${date}]`);
   return json({ ok: true }, 200, cors);
 }

@@ -205,6 +205,78 @@ only affects future sessions; recoloring propagates everywhere with zero writes.
 
 ---
 
+### Notes — one KV key per note, the notepad
+
+**Key shape:** `note:{id}` → bare object, **No KV TTL** — a note lives until deleted. The key also carries **KV metadata** `{title, snippet, createdAt, updatedAt}`, so the list below reads no note values at all.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/notes` | — | `{ items: [{id,title,snippet,createdAt,updatedAt}], updatedAt }` (newest first) |
+| GET | `/api/notes/:id` | — | `{ note: {...}, updatedAt }` or **404** |
+| PUT | `/api/notes/:id` | `{ id, title, snippet, text, createdAt, updatedAt }` | `{ ok }` or `{ ok: false, stale: true, item }` |
+| DELETE | `/api/notes/:id` | — | `{ ok }` |
+
+#### A note object
+
+```json
+{
+  "id":        "n7q2m4rz99z0a",
+  "title":     "buy graph paper",
+  "snippet":   "ask sir about the lab",
+  "text":      "buy graph paper\nask sir about the lab",
+  "createdAt": 1717770000000,
+  "updatedAt": 1717770000000
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | string | Client-generated. URL's `:id` wins if body's `id` differs. |
+| `title` | string | Derived from the first non-empty line of `text` at save time; capped ~80 chars. Also stored in KV metadata so lists never read values. |
+| `snippet` | string | The lines after the title collapsed to one line; capped ~100 chars. Also in metadata. |
+| `text` | string | May be empty (that's how a note is cleared). Capped at 64 KB per note. The list never returns it. |
+| `createdAt` | number | **Unix ms.** Set once on insert. |
+| `updatedAt` | number | **Unix ms.** Bumped on every save. Drives last-write-wins. |
+
+**The list is metadata-only** — it comes straight from the KV key scan (one
+`list` operation), so browsing costs the same whether there are 5 notes or 500.
+Rows written before metadata existed are value-read as a fallback and gain
+metadata the next time they're saved.
+
+**Opening one note is `GET /api/notes/:id`** — a single read that returns the body.
+
+**PUT is last-write-wins per item**, identical to deadlines and subjects.
+
+---
+
+### `GET /api/all` — the whole plan in one request
+
+```http
+GET /api/all
+```
+
+Response:
+```json
+{
+  "sessions":  { "2026-09-22": [ ... ] },
+  "deadlines": [ ... ],
+  "subjects":  [ ... ],
+  "notes":     [ {id,title,snippet,createdAt,updatedAt}, ... ],
+  "updatedAt": 1717770000000
+}
+```
+
+This is what a full pull uses. The worker does **one namespace-wide `list`**
+(keys bucketed by prefix) plus one parallel `get` per value key — the notes come
+straight from key metadata, so no note values are read. That keeps a pull at
+**1 list request** (the tightest KV free-tier quota is 1,000 list requests/day)
+instead of four, and 1 HTTP request instead of four.
+
+Clients should fall back to the four per-collection requests when this returns
+**404** (an older worker), so frontend and worker can deploy in any order.
+
+---
+
 ## 4. Error responses (all the frontend ever needs to know)
 
 | Status | When | Body | Frontend does |
@@ -319,6 +391,25 @@ curl -sS -X PUT \
 
 # remove a subject
 curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" $URL/api/subjects/subj1
+
+# list notes (metadata only — no bodies)
+curl -sS -H "Authorization: Bearer $TOKEN" $URL/api/notes
+
+# read one note's body
+curl -sS -H "Authorization: Bearer $TOKEN" $URL/api/notes/note1
+
+# write a note
+curl -sS -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"note1","title":"buy graph paper","snippet":"ask sir about the lab","text":"buy graph paper\nask sir about the lab","createdAt":1717770000000,"updatedAt":1717770000000}' \
+  $URL/api/notes/note1
+
+# delete a note
+curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" $URL/api/notes/note1
+
+# whole-plan snapshot in one request
+curl -sS -H "Authorization: Bearer $TOKEN" $URL/api/all
 ```
 
 Expected: 200s and `{"ok":true}` or the data you PUT. The `-sS` flag silences the progress bar but still prints errors.
@@ -330,8 +421,10 @@ Expected: 200s and `{"ok":true}` or the data you PUT. The `-sS` flag silences th
 You don't need to read the worker source to call it. Just:
 
 - **Auth header on every request:** `Authorization: Bearer <user's token>`
-- **12 endpoints** in the three tables above
-- **Six data shapes:** `Session`, `Deadline`, `Subject`, `DateList`, `SessionAll`, `DeadlineList` (subject list uses the `SubjectList` envelope)
+- **17 endpoints** in the five tables above
+- **A full pull is one request** — `GET /api/all` (one `list`, no version check,
+  no polling; the client pulls on open/tab-focus and via the notes refresh button)
+- **Seven data shapes:** `Session`, `Deadline`, `Subject`, `Note`, `AllSnapshot`, `DateList`, `SessionAll`
 - **All times are Unix milliseconds except `expiresAt` (seconds)** and `dueDate` ("YYYY-MM-DD" string)
 - **All ids are client-generated** — generate once, never change
 - **PUT replaces the day, it doesn't merge** — send the full list. The client merges by `updatedAt`

@@ -36,6 +36,15 @@ export interface Subject {
   updatedAt: number; // ms epoch — bumped on every edit; drives last-write-wins
 }
 
+export interface Note {
+  id: string;
+  title: string; // first line of the body, derived at save time
+  snippet: string; // rest of the body collapsed to one line, for the list preview
+  text?: string; // body — present only for notes this device has opened (or created)
+  createdAt: number; // ms epoch
+  updatedAt: number; // ms epoch — bumped on every save
+}
+
 export type SyncState = 'offline' | 'syncing' | 'synced' | 'error';
 
 export interface CloudConfig {

@@ -10,6 +10,9 @@ import { Timeline } from '@/features/timeline/Timeline';
 import { WeeklyScheduleModal } from '@/features/timeline/WeeklyScheduleModal';
 import { SessionPopup } from '@/components/SessionPopup';
 import { SettingsModal } from '@/features/settings/SettingsModal';
+import { NotesPage } from '@/features/notes/NotesPage';
+import { NoteView } from '@/features/notes/NoteView';
+import { useHashRoute } from '@/lib/useHashRoute';
 import { useCloudSync, useSyncPill, refreshFromCloud, ensureDateLoaded } from '@/features/sync/useCloudSync';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
@@ -19,6 +22,7 @@ import type { Session } from '@/types';
 
 export function App() {
   useCloudSync();
+  const route = useHashRoute();
 
   // initial day = today (only on first mount)
   const [weekOffset, setWeekOffset] = useState(0);
@@ -98,6 +102,33 @@ export function App() {
           }. edits are queued and upload once the connection is back.`
         : `cloud not reachable${reason} — nothing is cached on this device yet, so there is nothing to show.`;
 
+  // notepad lives on its own hash route so the back button and refresh work.
+  // It gets the same offline banner as the planner — a failed pull on the notes
+  // page must not look like "no notes" — plus the sync pill in its header.
+  if (route.name === 'notes') {
+    return (
+      <div className="app">
+        {offlineCache && (
+          <div className="offline-banner" role="status">
+            <span>{bannerText}</span>
+            <button
+              type="button"
+              disabled={syncState === 'syncing'}
+              onClick={() => void refreshFromCloud({ manual: true })}
+            >
+              retry
+            </button>
+          </div>
+        )}
+        {route.id ? (
+          <NoteView key={route.id} id={route.id} onOpenSettings={() => setSettingsOpen(true)} />
+        ) : (
+          <NotesPage onOpenSettings={() => setSettingsOpen(true)} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <Topbar
@@ -108,14 +139,14 @@ export function App() {
       />
 
       {offlineCache && (
-        <div className="offline-banner" role="status">
-          <span>{bannerText}</span>
-          <button
-            type="button"
-            disabled={syncState === 'syncing'}
-            onClick={() => void refreshFromCloud()}
-          >
-            retry
+          <div className="offline-banner" role="status">
+            <span>{bannerText}</span>
+            <button
+              type="button"
+              disabled={syncState === 'syncing'}
+              onClick={() => void refreshFromCloud({ manual: true })}
+            >
+              retry
           </button>
         </div>
       )}

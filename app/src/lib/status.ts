@@ -1,4 +1,5 @@
-import type { Deadline, Session, Subject, TaskStatus } from '@/types';
+import type { Deadline, Note, Session, Subject, TaskStatus } from '@/types';
+import { deriveTitle, deriveSnippet } from '@/lib/notes';
 
 // legacy records (localStorage / KV written before the tri-state change)
 // carry `done: boolean` instead of `status`. Normalization lives here so
@@ -73,5 +74,24 @@ export function normalizeSubject(raw: Partial<Subject> | null | undefined): Subj
     color: raw.color,
     createdAt,
     updatedAt: Number.isFinite(Number(raw.updatedAt)) ? Number(raw.updatedAt) : createdAt,
+  };
+}
+
+export function normalizeNote(raw: Partial<Note> | null | undefined): Note | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.id !== 'string' || !raw.id) return null;
+  // text is optional — list rows are metadata-only until the note is opened
+  if (raw.text !== undefined && typeof raw.text !== 'string') return null;
+  const createdAt = Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now();
+  const updatedAt = Number.isFinite(Number(raw.updatedAt)) ? Number(raw.updatedAt) : createdAt;
+  // rows cached before title/snippet existed derive them from the body
+  const text = raw.text ?? '';
+  return {
+    id: raw.id,
+    title: typeof raw.title === 'string' && raw.title.trim() ? raw.title : deriveTitle(text),
+    snippet: typeof raw.snippet === 'string' ? raw.snippet : deriveSnippet(text),
+    ...(raw.text !== undefined ? { text: raw.text } : {}),
+    createdAt,
+    updatedAt,
   };
 }

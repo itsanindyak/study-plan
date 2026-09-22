@@ -4,6 +4,7 @@ import { SyncPill } from './SyncPill';
 import { WeekNav } from './WeekNav';
 import { IconButton } from './IconButton';
 import { MONTHS, addDays } from '@/lib/date';
+import { goNotes } from '@/lib/useHashRoute';
 
 export function Topbar({
   weekStart,
@@ -34,6 +35,9 @@ export function Topbar({
           onPrev={onPrevWeek}
           onNext={onNextWeek}
         />
+        <IconButton onClick={() => goNotes()} label="notepad" title="notepad">
+          ✎
+        </IconButton>
         <IconButton onClick={onOpenSettings} label="cloud settings" title="cloud settings">
           ⚙
         </IconButton>

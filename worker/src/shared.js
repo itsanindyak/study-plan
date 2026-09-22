@@ -1,9 +1,16 @@
 // Shared utilities: CORS, auth, response helpers, KV key/TTL utils, sanitizers.
 
 export const SESSION_PREFIX = "session:";
+// Tombstone for a deleted day: listed by getAll so deletions propagate to
+// incremental (`?since=`) pulls, then auto-expires. 30d outlives any client's
+// pull gap in practice; a client offline longer just takes a full pull.
+export const SDEL_PREFIX = "sdel:";
+export const SDEL_TTL_SEC = 30 * 86400;
 export const DEADLINE_PREFIX = "deadline:";
 export const SUBJECT_PREFIX = "subject:";
+export const NOTE_PREFIX = "note:";
 export const MAX_BODY_BYTES = 256 * 1024; // 256 KB per request — plenty for a personal planner
+export const MAX_NOTE_CHARS = 64 * 1024; // one note's body; title is derived client-side
 
 // ─── CORS / origin ────────────────────────────────────────────
 
@@ -65,11 +72,20 @@ export function errResponse(status, msg, cors) {
 export function sessionKey(date) {
   return SESSION_PREFIX + date;
 }
+export function sessionTombKey(date) {
+  return SDEL_PREFIX + date;
+}
+export function dateFromSessionTombKey(k) {
+  return k.slice(SDEL_PREFIX.length);
+}
 export function deadlineKey(id) {
   return DEADLINE_PREFIX + id;
 }
 export function subjectKey(id) {
   return SUBJECT_PREFIX + id;
+}
+export function noteKey(id) {
+  return NOTE_PREFIX + id;
 }
 export function dateFromSessionKey(k) {
   return k.slice(SESSION_PREFIX.length);
@@ -186,5 +202,52 @@ export function sanitizeSubject(s) {
     createdAt,
     // last-write-wins marker, like deadlines
     updatedAt: Number.isFinite(+s.updatedAt) ? +s.updatedAt : createdAt,
+  };
+}
+
+// Notes are a free-form scratchpad: text may be empty (that's how you clear
+// one) and is capped so a single PUT can't blow past the request limit. The
+// Notes carry a derived title + snippet (from the first line(s) of the body)
+// both in the stored value and in the key's KV metadata, so the list endpoint
+// can render every row from a single `list` without reading any values.
+export function deriveNoteTitle(text) {
+  if (typeof text !== "string") return "untitled";
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (t) return t.length > 80 ? t.slice(0, 80).trimEnd() + "…" : t;
+  }
+  return "untitled";
+}
+
+export function deriveNoteSnippet(text) {
+  if (typeof text !== "string") return "";
+  const lines = text.split("\n");
+  const first = lines.findIndex((l) => l.trim());
+  if (first === -1) return "";
+  const rest = lines.slice(first + 1).map((l) => l.trim()).filter(Boolean).join(" · ");
+  return rest.length > 100 ? rest.slice(0, 100).trimEnd() + "…" : rest;
+}
+
+export function sanitizeNote(n) {
+  if (!n || typeof n !== "object") return null;
+  // A real PUT always carries text; anything else is a malformed write
+  if (typeof n.text !== "string") return null;
+  const text =
+    n.text.length > MAX_NOTE_CHARS ? n.text.slice(0, MAX_NOTE_CHARS) : n.text;
+  const createdAt = Number.isFinite(+n.createdAt) ? +n.createdAt : Date.now();
+  const title =
+    typeof n.title === "string" && n.title.trim()
+      ? n.title.trim().slice(0, 80)
+      : deriveNoteTitle(text);
+  const snippet =
+    typeof n.snippet === "string" ? n.snippet.slice(0, 100) : deriveNoteSnippet(text);
+  return {
+    id: typeof n.id === "string" && n.id ? n.id : newId(),
+    title,
+    snippet,
+    text,
+    createdAt,
+    // last-write-wins marker, like deadlines/subjects
+    updatedAt: Number.isFinite(+n.updatedAt) ? +n.updatedAt : createdAt,
   };
 }

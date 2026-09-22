@@ -8,7 +8,7 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
   const handleClick = async (e: React.MouseEvent) => {
     if (configured) {
       e.stopPropagation();
-      await refreshFromCloud();
+      await refreshFromCloud({ manual: true });
     } else {
       onClick();
     }

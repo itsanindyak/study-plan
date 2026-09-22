@@ -3,6 +3,9 @@
 //   session:YYYY-MM-DD  →  { sessions: [ {id, time, duration, subject, topic, color, status, updatedAt} ] }
 //   deadline:{id}       →  { id, title, dueDate, source, status, createdAt, updatedAt }   (with KV TTL)
 //   subject:{id}        →  { id, name, color, createdAt, updatedAt }   (subject catalog, no TTL)
+//   note:{id}           →  { id, title, snippet, text, createdAt, updatedAt }   (notepad, no TTL;
+//                          title/snippet/timestamps also ride in the key's KV metadata so the
+//                          list endpoint needs one `list` and no value reads)
 // status is 'pending' | 'done' | 'notdone' (legacy rows with done:boolean are normalized on read).
 //
 // Auth: Bearer token from env.SECRET_TOKEN.
@@ -33,6 +36,13 @@ import {
   putSubject,
   deleteSubject,
 } from "./subjects.js";
+import {
+  listNotes,
+  putNote,
+  deleteNote,
+  getNote,
+} from "./notes.js";
+import { getAll } from "./all.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -159,6 +169,38 @@ export default {
       }
       if (request.method === "DELETE") return deleteSubject(id, env, cors);
       return errResponse(405, "Method not allowed", cors);
+    }
+
+    if (path === "/api/notes") {
+      if (request.method !== "GET") return errResponse(405, "Method not allowed", cors);
+      return listNotes(env, cors);
+    }
+
+    if (path.startsWith("/api/notes/")) {
+      const id = safeDecode(path.slice("/api/notes/".length));
+      if (id === null) return errResponse(400, "bad path encoding", cors);
+      if (!id) return errResponse(400, "missing id", cors);
+
+      if (request.method === "GET") return getNote(id, env, cors);
+      if (request.method === "PUT") {
+        const { body, error } = await readJsonBody(request, cors);
+        if (error) return error;
+        return putNote(id, body, env, cors);
+      }
+      if (request.method === "DELETE") return deleteNote(id, env, cors);
+      return errResponse(405, "Method not allowed", cors);
+    }
+
+    // Whole-plan snapshot in one request: a single namespace-wide list plus
+    // one parallel get per value key. This is what a full pull uses.
+    // `?since=<ms>` makes it incremental: only days changed since the
+    // client's watermark are value-read, deleted days come back as
+    // `removedDates`. Old clients simply omit it and get a full snapshot.
+    if (path === "/api/all") {
+      if (request.method !== "GET") return errResponse(405, "Method not allowed", cors);
+      const sinceRaw = url.searchParams.get("since");
+      const since = sinceRaw == null || sinceRaw === "" ? NaN : Number(sinceRaw);
+      return getAll(env, cors, since);
     }
 
     return errResponse(404, "Not found", cors);

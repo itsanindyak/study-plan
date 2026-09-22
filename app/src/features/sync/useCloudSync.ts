@@ -20,7 +20,8 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
 import { useSubjectStore, seedSubjectsFromSessions } from '@/store/useSubjectStore';
-import type { Deadline, DateKey, Session, SessionsByDate, Subject, SyncState } from '@/types';
+import { useNoteStore } from '@/store/useNoteStore';
+import type { Deadline, DateKey, Note, Session, SessionsByDate, Subject, SyncState } from '@/types';
 import { addDays, dateKey } from '@/lib/date';
 import { pinnedDates } from '@/lib/cachePins';
 import { CACHE_WINDOW_DAYS, useSessionStore } from '@/store/useSessionStore';
@@ -51,7 +52,17 @@ let dataOrigin: DataOrigin = 'local';
 // reconciles in the background.
 let booting = Boolean(useSettingsStore.getState().token) && !localHasData();
 let lastSyncAt: number | null = null;
+// incremental-pull watermark, always on the SERVER's clock (same clock as the
+// key metadata). Kept separate from lastSyncAt (client clock, pill display):
+// mixing clocks could permanently skip a write that lands inside the skew.
+let serverWatermark: number | null = null;
 let lastError: string | null = null;
+// Focus and tab-switch pulls are debounced: rapid clicking between two
+// side-by-side windows would otherwise fire a full pull per click, and the
+// 1,000/day list quota is the tightest one. Boot and explicit refreshes
+// bypass the debounce — see debouncedSync in the hook.
+let lastPullAt = 0;
+const PULL_DEBOUNCE_MS = 10_000;
 let lastErrorRetryable = true;
 // tracked as state rather than derived inside getSnapshot, which has to be
 // referentially stable between notifications
@@ -174,6 +185,11 @@ const TOMBSTONE_TTL = 30 * 86_400_000;
 const dirtyDates = new Set<string>();
 const dirtyDeadlines = new Map<string, 'put' | 'delete'>();
 const dirtySubjects = new Map<string, 'put' | 'delete'>();
+const dirtyNotes = new Map<string, 'put' | 'delete'>();
+// KV throttles same-key writes to 1/sec: note id -> last attempt timestamp, so
+// a flush landing <1s after the previous write defers instead of failing loudly
+const NOTE_WRITE_MIN_GAP_MS = 1_000;
+const lastNoteWriteAt = new Map<string, number>();
 // date -> (session id -> deletedAt ms)
 const tombstones = new Map<string, Map<string, number>>();
 
@@ -184,6 +200,7 @@ function saveQueue() {
       dirtyDates.size === 0 &&
       dirtyDeadlines.size === 0 &&
       dirtySubjects.size === 0 &&
+      dirtyNotes.size === 0 &&
       tombstones.size === 0
     ) {
       localStorage.removeItem(QUEUE_KEY);
@@ -199,6 +216,7 @@ function saveQueue() {
         dates: [...dirtyDates],
         deadlines: [...dirtyDeadlines.entries()],
         subjects: [...dirtySubjects.entries()],
+        notes: [...dirtyNotes.entries()],
         tombstones: tomb,
       }),
     );
@@ -215,6 +233,7 @@ function loadQueue() {
         dates?: unknown;
         deadlines?: unknown;
         subjects?: unknown;
+        notes?: unknown;
         tombstones?: unknown;
       };
       if (Array.isArray(parsed.dates)) {
@@ -242,6 +261,17 @@ function loadQueue() {
           }
         }
       }
+      if (Array.isArray(parsed.notes)) {
+        for (const entry of parsed.notes) {
+          if (
+            Array.isArray(entry) &&
+            typeof entry[0] === 'string' &&
+            (entry[1] === 'put' || entry[1] === 'delete')
+          ) {
+            dirtyNotes.set(entry[0], entry[1]);
+          }
+        }
+      }
       if (Array.isArray(parsed.tombstones)) {
         for (const entry of parsed.tombstones) {
           if (
@@ -262,9 +292,11 @@ function loadQueue() {
   try {
     const rawMeta = localStorage.getItem(META_KEY);
     if (rawMeta) {
-      const meta = JSON.parse(rawMeta) as { lastCloudAt?: unknown };
+      const meta = JSON.parse(rawMeta) as { lastCloudAt?: unknown; watermark?: unknown };
       const at = Number(meta.lastCloudAt);
       if (Number.isFinite(at)) lastSyncAt = at;
+      const wm = Number(meta.watermark);
+      if (Number.isFinite(wm)) serverWatermark = wm;
     }
   } catch {
     // ignore
@@ -273,7 +305,7 @@ function loadQueue() {
 
 function saveMeta() {
   try {
-    localStorage.setItem(META_KEY, JSON.stringify({ lastCloudAt: lastSyncAt }));
+    localStorage.setItem(META_KEY, JSON.stringify({ lastCloudAt: lastSyncAt, watermark: serverWatermark }));
   } catch {
     // ignore
   }
@@ -374,6 +406,40 @@ syncPins();
 // the normal flush uploads them.
 void seedSubjectsFromSessions();
 
+// Reconcile a pulled list (subjects/notes) with the local copy.
+//
+// Cloud wins for ids it holds — but a local edit we still owe the cloud
+// (pending 'put') may be newer, so the newer of the two is kept. A local item
+// the cloud does NOT have is kept only while we still owe an upload for it;
+// otherwise it was deleted on another device and dropping it is correct.
+//
+// What this replaces: treating "missing from cloud" as "deleted here" and
+// queueing a DELETE. A just-typed note is still queued as a 'put', so any pull
+// landing first (a failed/retried push, or a refresh inside the debounce) would
+// flip it to 'delete', drop it locally, and erase it from KV. Explicit deletes
+// are already queued by diffNotes/diffSubjects, so inferring them here was both
+// redundant and destructive.
+function mergePulled<T extends { id: string; updatedAt: number }>(
+  cloud: T[],
+  local: T[],
+  pending: Map<string, 'put' | 'delete'>,
+): T[] {
+  const pendingPuts = new Set(
+    [...pending.entries()].filter(([, op]) => op === 'put').map(([id]) => id),
+  );
+  const localById = new Map(local.map((x) => [x.id, x] as const));
+  const cloudIds = new Set(cloud.map((x) => x.id));
+
+  const merged: T[] = cloud.map((c) => {
+    const l = localById.get(c.id);
+    return l && pendingPuts.has(c.id) && l.updatedAt > c.updatedAt ? l : c;
+  });
+  for (const l of local) {
+    if (!cloudIds.has(l.id) && pendingPuts.has(l.id)) merged.push(l);
+  }
+  return merged;
+}
+
 // ─────── boot / focus refresh ───────
 let pullPromise: Promise<boolean> | null = null;
 
@@ -382,7 +448,8 @@ function localHasData(): boolean {
   return (
     Object.values(sessions).some((list) => list.length > 0) ||
     useDeadlineStore.getState().deadlines.length > 0 ||
-    useSubjectStore.getState().subjects.length > 0
+    useSubjectStore.getState().subjects.length > 0 ||
+    useNoteStore.getState().notes.length > 0
   );
 }
 
@@ -394,11 +461,13 @@ async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Pro
   const dates = Object.entries(useSessionStore.getState().sessions).filter(([, l]) => l.length > 0);
   const deadlines = useDeadlineStore.getState().deadlines;
   const subjects = useSubjectStore.getState().subjects;
+  const notes = useNoteStore.getState().notes;
 
   const results = await Promise.allSettled([
     ...dates.map(([date, list]) => kvClient.putSession(cfg, date, list)),
     ...deadlines.map((d) => kvClient.putDeadline(cfg, d)),
     ...subjects.map((s) => kvClient.putSubject(cfg, s)),
+    ...notes.map((n) => kvClient.putNote(cfg, n)),
   ]);
 
   if (results.some((r) => r.status === 'rejected')) {
@@ -407,12 +476,13 @@ async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Pro
     for (const [date] of dates) dirtyDates.add(date);
     for (const d of deadlines) dirtyDeadlines.set(d.id, 'put');
     for (const s of subjects) dirtySubjects.set(s.id, 'put');
+    for (const n of notes) dirtyNotes.set(n.id, 'put');
     saveQueue();
     scheduleSync();
     return false;
   }
   console.log(
-    `adopted local data as the initial cloud state: ${dates.length} days, ${deadlines.length} deadlines, ${subjects.length} subjects`,
+    `adopted local data as the initial cloud state: ${dates.length} days, ${deadlines.length} deadlines, ${subjects.length} subjects, ${notes.length} notes`,
   );
   return true;
 }
@@ -425,17 +495,49 @@ async function readCloud(): Promise<boolean> {
   if (!cfg.token) return false;
   try {
     setPill('syncing', 'syncing…');
-    const [rawSessions, cloudDeadlines, cloudSubjects] = await Promise.all([
-      kvClient.getAllSessions(cfg),
-      kvClient.getDeadlines(cfg),
-      kvClient.getSubjects(cfg),
-    ]);
+
+    // One request for the whole plan (a single namespace-wide list server-side).
+    // Falls back to the four per-collection requests when the worker predates
+    // /api/all, so the frontend and worker can deploy in any order.
+    // With a watermark the server value-reads only days changed after it and
+    // reports deleted days — steady-state pulls cost ~0 value reads.
+    // serverWatermark is null until the first successful pull → full pull.
+    const since = serverWatermark;
+    let rawSessions: SessionsByDate | null;
+    let cloudDeadlines: Deadline[] | null;
+    let cloudSubjects: Subject[] | null;
+    let cloudNotes: Note[] | null;
+    let removedDates: string[] | null = null;
+    const all = await kvClient.getAll(cfg, since);
+    // a legacy worker returns no `removedDates` — treat its snapshot as full
+    const incremental = all != null && Array.isArray(all.removedDates);
+    if (all) {
+      rawSessions = all.sessions;
+      cloudDeadlines = all.deadlines;
+      cloudSubjects = all.subjects;
+      cloudNotes = all.notes;
+      if (incremental) removedDates = all.removedDates ?? null;
+    } else {
+      [rawSessions, cloudDeadlines, cloudSubjects, cloudNotes] = await Promise.all([
+        kvClient.getAllSessions(cfg),
+        kvClient.getDeadlines(cfg),
+        kvClient.getSubjects(cfg),
+        kvClient.getNotes(cfg),
+      ]);
+    }
+
+    lastPullAt = Date.now();
 
     const cloudEmpty =
       (!rawSessions || Object.keys(rawSessions).length === 0) &&
       (!cloudDeadlines || cloudDeadlines.length === 0) &&
-      (!cloudSubjects || cloudSubjects.length === 0);
-    if (cloudEmpty && lastSyncAt == null && localHasData()) {
+      (!cloudSubjects || cloudSubjects.length === 0) &&
+      (!cloudNotes || cloudNotes.length === 0);
+    // an incremental pull legitimately returns empty sessions when nothing
+    // changed — that must never trigger adoption, which would re-push the
+    // whole local store as "initial cloud state". Adoption is a full-pull-only
+    // path (it also requires lastSyncAt == null, i.e. no watermark yet).
+    if (!incremental && cloudEmpty && lastSyncAt == null && localHasData()) {
       if (!(await adoptLocalAsCloud(cfg))) {
         dataOrigin = 'cache';
         setPill('error', 'sync error');
@@ -454,8 +556,19 @@ async function readCloud(): Promise<boolean> {
 
     try {
       if (rawSessions) {
-        const cloudSessions = applyTombstones(rawSessions);
-        useSessionStore.getState().hydrateAll(cloudSessions);
+        if (incremental) {
+          // never clobber a day this device still owes a push for: those edits
+          // merge at flush time (mergeSessions), and the retry flush reads the
+          // store — replacing them with the older cloud copy would lose them
+          const changed = Object.fromEntries(
+            Object.entries(rawSessions).filter(([date]) => !dirtyDates.has(date)),
+          );
+          const removed = (removedDates ?? []).filter((d) => !dirtyDates.has(d));
+          useSessionStore.getState().hydrateChanged(applyTombstones(changed), removed);
+        } else {
+          const cloudSessions = applyTombstones(rawSessions);
+          useSessionStore.getState().hydrateAll(cloudSessions);
+        }
       }
       if (cloudDeadlines) {
         // Auto-purge local entries >3 days past before replacing.
@@ -469,22 +582,30 @@ async function readCloud(): Promise<boolean> {
         useDeadlineStore.getState().replaceAll(cloudDeadlines);
       }
       if (cloudSubjects) {
-        // Catalog wins — recolors/renames from another device overwrite local.
-        // Any local subject missing from cloud is dropped locally (a manual
-        // delete that landed somewhere else) and stays in the dirty queue.
-        const local = useSubjectStore.getState().subjects;
-        for (const s of local) {
-          if (!cloudSubjects.some((c) => c.id === s.id)) dirtySubjects.set(s.id, 'delete');
-        }
-        if (dirtySubjects.size) saveQueue();
-        useSubjectStore.getState().replaceAll(cloudSubjects);
+        useSubjectStore.getState().replaceAll(mergePulled(
+          cloudSubjects,
+          useSubjectStore.getState().subjects,
+          dirtySubjects,
+        ));
+      }
+      if (cloudNotes) {
+        useNoteStore.getState().replaceAll(mergePulled(
+          cloudNotes,
+          useNoteStore.getState().notes,
+          dirtyNotes,
+        ));
       }
     } finally {
       hydrationDepth--;
     }
 
-    // a successful read is what makes this data the database's, not a cache
+    // a successful read is what makes this data the database's, not a cache.
+    // the watermark is the SERVER's pre-list timestamp: same clock as the key
+    // metadata, so a write landing mid-pull is caught by the next pull (no gap)
     lastSyncAt = Date.now();
+    if (all?.updatedAt != null && Number.isFinite(all.updatedAt)) {
+      serverWatermark = all.updatedAt;
+    }
     lastError = null;
     lastErrorRetryable = true;
     saveMeta();
@@ -507,14 +628,26 @@ async function readCloud(): Promise<boolean> {
 // transient block or rate limit heals on its own.
 let staleTimer: ReturnType<typeof setTimeout> | null = null;
 let staleDelay = 15_000;
+// automatic retries give up after this many consecutive failures — a revoked
+// token or dead worker would otherwise pull once a minute per open tab,
+// forever. The pill keeps showing the error; the next explicit user action
+// (pill click, refresh button, focus pull) starts a fresh attempt budget.
+const MAX_STALE_ATTEMPTS = 10;
+let staleAttempts = 0;
 
 function scheduleStaleRetry() {
   if (staleTimer) return;
+  if (staleAttempts >= MAX_STALE_ATTEMPTS) return;
+  staleAttempts++;
   staleTimer = setTimeout(() => {
     staleTimer = null;
-    if (useSettingsStore.getState().token && dataOrigin === 'cache') void pullFromCloud();
+    // re-sync (push first) rather than a bare pull — a pull hydrates the whole
+    // session map and would drop edits that haven't been pushed yet
+    if (useSettingsStore.getState().token && dataOrigin === 'cache') void refreshFromCloud();
   }, staleDelay);
-  staleDelay = Math.min(staleDelay * 2, 300_000);
+  // cap at a minute: retries 15s → 30s → 60s, so a stale cache can't sit for
+  // five minutes after a transient failure
+  staleDelay = Math.min(staleDelay * 2, 60_000);
 }
 
 function clearStaleRetry() {
@@ -523,6 +656,7 @@ function clearStaleRetry() {
     staleTimer = null;
   }
   staleDelay = 15_000;
+  staleAttempts = 0;
 }
 
 // The boot gate and a visibility refresh must share one read, not race.
@@ -544,9 +678,103 @@ export function pullFromCloud(): Promise<boolean> {
 
 // Push whatever is pending, then pull. Order matters: pulling first would
 // replace local state and silently drop edits that were never sent.
-export async function refreshFromCloud(): Promise<void> {
-  if (dirtyDates.size || dirtyDeadlines.size) await flushDirty();
+// `manual` marks an explicit user action (pill click, refresh button): it
+// clears any pending automatic retry and restarts the attempt budget.
+export async function refreshFromCloud(opts?: { manual?: boolean }): Promise<void> {
+  if (opts?.manual) {
+    if (staleTimer) {
+      clearTimeout(staleTimer);
+      staleTimer = null;
+    }
+    staleAttempts = 0;
+  }
+  if (
+    dirtyDates.size ||
+    dirtyDeadlines.size ||
+    dirtySubjects.size ||
+    dirtyNotes.size
+  ) {
+    await flushDirty();
+  }
   await pullFromCloud();
+}
+
+// ─────── notes-page actions ───────
+
+// Opening one note: fetch just that note's body (a single read). Falls back to
+// the cached copy when offline or the note was never synced. When this device
+// still owes a save for the note, the local copy IS the newest — the flush's
+// LWW will resolve against the server — so it's returned untouched.
+// In-flight requests are shared per id (StrictMode double-mount = one fetch),
+// but a call whose stored signal was aborted never reuses that promise — the
+// remount after cleanup always starts a fresh fetch.
+const inflightNoteBodies = new Map<string, { promise: Promise<Note | null>; signal?: AbortSignal }>();
+
+export async function fetchNoteBody(id: string, signal?: AbortSignal): Promise<Note | null> {
+  const cached = useNoteStore.getState().notes.find((n) => n.id === id) ?? null;
+  const cfg = {
+    token: useSettingsStore.getState().token,
+    workerUrl: useSettingsStore.getState().workerUrl,
+  };
+  if (!cfg.token) return cached;
+  if (dirtyNotes.get(id) === 'put') return cached;
+  const running = inflightNoteBodies.get(id);
+  if (running && !running.signal?.aborted) return running.promise;
+  let p!: Promise<Note | null>;
+  p = (async () => {
+    try {
+      const note = await kvClient.getNote(cfg, id, signal ? { signal } : undefined);
+      if (note) {
+        hydrationDepth++;
+        try {
+          useNoteStore.getState().applyFetched(note);
+        } finally {
+          hydrationDepth--;
+        }
+      }
+      return note ?? cached;
+    } catch {
+      return cached;
+    } finally {
+      const cur = inflightNoteBodies.get(id);
+      if (cur?.promise === p) inflightNoteBodies.delete(id);
+    }
+  })();
+  inflightNoteBodies.set(id, { promise: p, signal });
+  return p;
+}
+
+// The notes-page refresh button: push any pending note writes, then re-fetch
+// the metadata list — one list operation — and merge it into the store.
+// Metadata wins per row (mergePulled keeps pending puts), and cached bodies
+// are preserved by replaceAll.
+export async function refreshNotesList(): Promise<void> {
+  const cfg = {
+    token: useSettingsStore.getState().token,
+    workerUrl: useSettingsStore.getState().workerUrl,
+  };
+  if (!cfg.token) return;
+  if (dirtyNotes.size) await flushDirty();
+  try {
+    const items = await kvClient.getNotes(cfg);
+    if (items) {
+      hydrationDepth++;
+      try {
+        useNoteStore
+          .getState()
+          .replaceAll(mergePulled(items, useNoteStore.getState().notes, dirtyNotes));
+      } finally {
+        hydrationDepth--;
+      }
+    }
+  } catch (err) {
+    // a failed refresh means the list on screen is only a cache — say so on
+    // the pill/banner instead of failing silently
+    console.warn('notes refresh failed:', err);
+    lastError = describeError(err);
+    dataOrigin = 'cache';
+    setPill('error', 'sync error');
+  }
 }
 
 // Boot path. Stale-while-revalidate: a device that already has a cached copy
@@ -663,7 +891,12 @@ function flushDirty(): Promise<void> {
   }
   const token = useSettingsStore.getState().token;
   if (!token) return Promise.resolve();
-  if (dirtyDates.size === 0 && dirtyDeadlines.size === 0 && dirtySubjects.size === 0) {
+  if (
+    dirtyDates.size === 0 &&
+    dirtyDeadlines.size === 0 &&
+    dirtySubjects.size === 0 &&
+    dirtyNotes.size === 0
+  ) {
     return Promise.resolve();
   }
 
@@ -677,6 +910,7 @@ function flushDirty(): Promise<void> {
     const dates = [...dirtyDates];
     const dls = [...dirtyDeadlines.entries()];
     const subs = [...dirtySubjects.entries()];
+    const nts = [...dirtyNotes.entries()];
     let failed = false;
     let authBlocked = false;
     let retryIn = 4_000;
@@ -766,6 +1000,48 @@ function flushDirty(): Promise<void> {
       }
     }
 
+    for (const [id, op] of nts) {
+      try {
+        // same-key 1/sec throttle: a flush landing <1s after the previous
+        // write to this note would be rejected with a phantom "sync error".
+        // Defer it to the normal debounced path instead — no failure recorded.
+        if (Date.now() - (lastNoteWriteAt.get(id) ?? 0) < NOTE_WRITE_MIN_GAP_MS) {
+          scheduleSync();
+          continue;
+        }
+        if (op === 'delete') {
+          await kvClient.deleteNote(cfg, id);
+        } else {
+          const n: Note | undefined = useNoteStore.getState().notes.find((x) => x.id === id);
+          if (n && n.text !== undefined) {
+            const res = await kvClient.putNote(cfg, n);
+            // server has newer text — adopt it so the open note shows the winner
+            if (res?.stale && res.item) {
+              console.info('note ' + id + ': server copy is newer, adopted it');
+              hydrationDepth++;
+              try {
+                useNoteStore.getState().applyFetched(res.item);
+              } finally {
+                hydrationDepth--;
+              }
+            }
+          } else {
+            // no body to push (metadata-only row) — drop the stale queue entry
+            console.warn('note ' + id + ': queued put has no body, dropping');
+          }
+        }
+        dirtyNotes.delete(id);
+        lastNoteWriteAt.set(id, Date.now());
+        saveQueue();
+      } catch (err) {
+        console.warn(op + ' note ' + id + ' failed:', err);
+        if (!lastError) lastError = describeError(err);
+        if (!isRetryable(err)) authBlocked = true;
+        retryIn = Math.max(retryIn, retryDelayFor(err));
+        failed = true;
+      }
+    }
+
     if (failed) {
       // an auth or permission failure needs the user, not another attempt; the
       // queue stays on disk until they fix it or reload
@@ -779,7 +1055,9 @@ function flushDirty(): Promise<void> {
       lastSyncAt = Date.now();
       refreshPill();
       // items that were marked dirty while this flush was in flight
-      if (dirtyDates.size || dirtyDeadlines.size || dirtySubjects.size) scheduleSync();
+      if (dirtyDates.size || dirtyDeadlines.size || dirtySubjects.size || dirtyNotes.size) {
+        scheduleSync();
+      }
     }
   })().finally(() => {
     flushPromise = null;
@@ -788,10 +1066,46 @@ function flushDirty(): Promise<void> {
   return flushPromise;
 }
 
+// Resolves when the push of whatever the caller just queued settles:
+// 'saved' once the queue is fully flushed, 'error' when the flush was
+// blocked (rejected token, offline retry loop). The local copy is saved
+// either way; a retry stays scheduled and the pill keeps reporting it.
+export function waitForSaved(): Promise<'saved' | 'error'> {
+  return new Promise((resolve) => {
+    // a save right after a previous 'error' would settle instantly on that
+    // stale state, so success requires catching the flush actually run
+    let sawSyncing = pillState === 'syncing';
+    const settle = (result: 'saved' | 'error') => {
+      unsub();
+      clearTimeout(guard);
+      resolve(result);
+    };
+    const check = () => {
+      if (pillState === 'syncing') {
+        sawSyncing = true;
+      } else if (pillState === 'error') {
+        settle('error');
+      } else if (
+        sawSyncing &&
+        flushPromise === null &&
+        dirtyDates.size === 0 &&
+        dirtyDeadlines.size === 0 &&
+        dirtySubjects.size === 0 &&
+        dirtyNotes.size === 0
+      ) {
+        settle('saved');
+      }
+    };
+    const unsub = subscribe(check);
+    const guard = setTimeout(() => settle(pillState === 'error' ? 'error' : 'saved'), 60_000);
+  });
+}
+
 // ─────── store subscriptions ───────
 let prevSessionsRef: Record<string, Session[]> = {};
 let prevDeadlinesRef: Deadline[] = [];
 let prevSubjectsRef: Subject[] = [];
+let prevNotesRef: Note[] = [];
 
 function diffSessions(curr: Record<string, Session[]>) {
   const prev = prevSessionsRef;
@@ -845,6 +1159,26 @@ function diffSubjects(curr: Subject[]) {
   saveQueue();
 }
 
+function diffNotes(curr: Note[]) {
+  const prev = prevNotesRef;
+  if (curr === prev) return;
+  const prevById = new Map(prev.map((n) => [n.id, n] as const));
+  for (const n of curr) {
+    const before = prevById.get(n.id);
+    // A metadata-only row (list refresh) must never queue a push — there is no
+    // body to save, and the worker would 400 a text-less PUT.
+    if (!before || before !== n) {
+      if (n.text !== undefined) dirtyNotes.set(n.id, 'put');
+    }
+  }
+  const currIds = new Set(curr.map((n) => n.id));
+  for (const n of prev) {
+    if (!currIds.has(n.id)) dirtyNotes.set(n.id, 'delete');
+  }
+  prevNotesRef = curr;
+  saveQueue();
+}
+
 // ─────── main hook ───────
 export function useCloudSync() {
   const token = useSettingsStore((s) => s.token);
@@ -864,6 +1198,7 @@ export function useCloudSync() {
     prevSessionsRef = useSessionStore.getState().sessions;
     prevDeadlinesRef = useDeadlineStore.getState().deadlines;
     prevSubjectsRef = useSubjectStore.getState().subjects;
+    prevNotesRef = useNoteStore.getState().notes;
 
     // boot: flush anything pending from a previous session, then make the
     // database authoritative for what the user sees
@@ -897,14 +1232,54 @@ export function useCloudSync() {
       diffSubjects(state.subjects);
       if (dirtySubjects.size) scheduleSync();
     });
+    const unsubNotes = useNoteStore.subscribe((state) => {
+      refreshHasCache();
+      if (isHydrating()) {
+        prevNotesRef = state.notes;
+        return;
+      }
+      diffNotes(state.notes);
+      if (dirtyNotes.size) scheduleSync();
+    });
 
-    // coming back to the tab: push pending edits, then re-pull so data
-    // created elsewhere (another device, or the ingest API) shows up.
-    // No loading gate here — the screen already has data on it.
+    // Coming back to the tab: push pending edits, then re-pull so data created
+    // elsewhere (another device, or the ingest API) shows up. No loading gate
+    // here — the screen already has data on it.
+    //
+    // Leaving the tab: push NOW. Chrome throttles timers in hidden tabs to about
+    // once a minute, so the pending 800ms flush would otherwise sit un-sent
+    // while the user is looking at the other browser. `visibilitychange` fires
+    // immediately even though timers don't, so the edit goes out as the tab
+    // goes away.
+    const flushIfPending = () => {
+      if (
+        dirtyDates.size ||
+        dirtyDeadlines.size ||
+        dirtySubjects.size ||
+        dirtyNotes.size
+      ) {
+        void flushDirty();
+      }
+    };
+
+    // Focus/tab-switch pulls are debounced: two windows side by side fire focus
+    // on every click, and a full pull per click would chew the 1,000/day list
+    // quota. Pending edits are NEVER debounced — only the pull is. Boot and the
+    // explicit refresh button call refreshFromCloud directly and bypass this.
+    const debouncedSync = () => {
+      flushIfPending();
+      if (Date.now() - lastPullAt < PULL_DEBOUNCE_MS) return;
+      void refreshFromCloud();
+    };
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void refreshFromCloud();
+      if (document.visibilityState === 'visible') debouncedSync();
+      else flushIfPending();
     };
     document.addEventListener('visibilitychange', onVisible);
+
+    // Two windows side by side never change tab visibility, so a window focus
+    // is the only cue that the user might be looking at this copy.
+    window.addEventListener('focus', debouncedSync);
 
     // pill auto-refresh every 5s for "ago" labels
     const pillTick = setInterval(refreshPill, 5000);
@@ -913,7 +1288,9 @@ export function useCloudSync() {
       unsubSessions();
       unsubDeadlines();
       unsubSubjects();
+      unsubNotes();
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', debouncedSync);
       clearInterval(pillTick);
       if (syncTimer) {
         clearTimeout(syncTimer);

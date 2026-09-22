@@ -35,6 +35,8 @@ interface SessionState {
 
   // cloud hydration
   hydrateAll: (cloud: SessionsByDate) => void;
+  // incremental pull: replace only the changed days, drop server-deleted days
+  hydrateChanged: (changed: SessionsByDate, removedDates: DateKey[]) => void;
 }
 
 // localStorage keeps only recent days; the database keeps everything and older
@@ -179,6 +181,19 @@ export const useSessionStore = create<SessionState>()(
           );
         }
         set({ sessions });
+      },
+
+      hydrateChanged: (changed, removedDates) => {
+        set((s) => {
+          const sessions = { ...s.sessions };
+          for (const [date, list] of Object.entries(changed ?? {})) {
+            sessions[date] = byStartTime(
+              (list ?? []).map(normalizeSession).filter((x): x is Session => x !== null),
+            );
+          }
+          for (const date of removedDates ?? []) delete sessions[date];
+          return { sessions };
+        });
       },
     }),
     {

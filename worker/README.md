@@ -15,7 +15,9 @@ worker/
     ├── shared.js         # CORS, auth, response, KV keys, TTL, sanitizers
     ├── sessions.js       # session route handlers
     ├── deadlines.js      # deadline route handlers
-    └── subjects.js       # subject catalog route handlers
+    ├── subjects.js       # subject catalog route handlers
+    ├── notes.js          # notepad route handlers
+    └── all.js            # single-request whole-plan snapshot
 ```
 
 ## API
@@ -62,11 +64,35 @@ unaffected (they keep their stored color).
 
 The client enforces case-insensitive unique names. The server does not (single-user, no KV name index).
 
+### Notes — one KV key per note, the notepad (no TTL)
+
+`note:{id}` → `{ id, title, snippet, text, createdAt, updatedAt }`
+
+A free-form scratchpad. The title/snippet are derived from the body's first
+lines at save time and also ride in the key's **KV metadata**, so listing notes
+is a single `list` operation that reads no values. Bodies are capped at 64 KB.
+The list returns metadata only, sorted newest-updated first; opening a note
+(`GET /api/notes/:id`) fetches just that body.
+
+| Method   | Path                | Body                                                    | Returns                                        |
+| -------- | ------------------- | ------------------------------------------------------- | ---------------------------------------------- |
+| `GET`    | `/api/notes`        | —                                                       | `{ items: [meta...], updatedAt }`              |
+| `GET`    | `/api/notes/:id`    | —                                                       | `{ note: {...}, updatedAt }` or 404            |
+| `PUT`    | `/api/notes/:id`    | `{ id, title, snippet, text, createdAt, updatedAt }`     | `{ ok }` or `{ ok: false, stale: true, item }` |
+| `DELETE` | `/api/notes/:id`    | —                                                       | `{ ok }`                                       |
+
 ### Other
 
 | Method | Path         | Returns         |
 | ------ | ------------ | --------------- |
 | `GET`  | `/api/ping`  | `{ ok, ts }`    |
+| `GET`  | `/api/all`   | whole-plan snapshot, see below |
+
+`GET /api/all` returns `{ sessions, deadlines, subjects, notes, updatedAt }` in
+one request — the worker does a single namespace-wide `list` plus one `get` per
+value key. This is what a full pull uses, because the KV free tier allows only
+1,000 `list` requests/day while reads are 100,000/day. Clients fall back to the
+four per-collection requests when it 404s (older worker).
 
 ### Conflict resolution
 
