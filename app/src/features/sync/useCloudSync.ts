@@ -12,6 +12,9 @@
 //   `updatedAt`, so a stale tab can't clobber newer cloud edits. Local
 //   deletions ride along as tombstones, otherwise that merge would resurrect
 //   whatever the remote copy still holds.
+// • The day's 1–10 rating lives inside the session day key, so rating edits
+//   mark the same dirtyDates queue and merge with the same pull-before-push
+//   step (newer ratingUpdatedAt wins) — no separate collection, no extra reads.
 // • On tab visibilitychange → visible: pushes pending work, then re-pulls.
 // • Exposes the current sync state via a small subscription that
 //   components like <SyncPill/> can read.
@@ -21,7 +24,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
 import { useSubjectStore, seedSubjectsFromSessions } from '@/store/useSubjectStore';
 import { useNoteStore } from '@/store/useNoteStore';
-import type { Deadline, DateKey, Note, Session, SessionsByDate, Subject, SyncState } from '@/types';
+import type { Deadline, DateKey, Note, RatingEntry, RatingsByDate, Session, SessionsByDate, Subject, SyncState } from '@/types';
 import { addDays, dateKey } from '@/lib/date';
 import { pinnedDates } from '@/lib/cachePins';
 import { CACHE_WINDOW_DAYS, useSessionStore } from '@/store/useSessionStore';
@@ -445,8 +448,10 @@ let pullPromise: Promise<boolean> | null = null;
 
 function localHasData(): boolean {
   const sessions = useSessionStore.getState().sessions;
+  const ratings = useSessionStore.getState().ratings;
   return (
     Object.values(sessions).some((list) => list.length > 0) ||
+    Object.values(ratings).some((r) => r.value != null) ||
     useDeadlineStore.getState().deadlines.length > 0 ||
     useSubjectStore.getState().subjects.length > 0 ||
     useNoteStore.getState().notes.length > 0
@@ -458,13 +463,27 @@ function localHasData(): boolean {
 // an empty cloud wipe it. Once a device has synced before, the database wins
 // even when it is empty (someone deleted it).
 async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Promise<boolean> {
-  const dates = Object.entries(useSessionStore.getState().sessions).filter(([, l]) => l.length > 0);
+  const st = useSessionStore.getState();
+  const ratingOf = (date: DateKey): RatingEntry | undefined => {
+    const r = st.ratings[date];
+    return r && r.value != null ? r : undefined;
+  };
+  // rating-only days (empty sessions but a local rating) must be pushed too,
+  // or the adoption would orphan them
+  const dates = [
+    ...new Set([
+      ...Object.entries(st.sessions)
+        .filter(([, l]) => l.length > 0)
+        .map(([d]) => d),
+      ...Object.keys(st.ratings).filter((d) => ratingOf(d) !== undefined),
+    ]),
+  ];
   const deadlines = useDeadlineStore.getState().deadlines;
   const subjects = useSubjectStore.getState().subjects;
   const notes = useNoteStore.getState().notes;
 
   const results = await Promise.allSettled([
-    ...dates.map(([date, list]) => kvClient.putSession(cfg, date, list)),
+    ...dates.map((date) => kvClient.putSession(cfg, date, st.sessions[date] ?? [], ratingOf(date))),
     ...deadlines.map((d) => kvClient.putDeadline(cfg, d)),
     ...subjects.map((s) => kvClient.putSubject(cfg, s)),
     ...notes.map((n) => kvClient.putNote(cfg, n)),
@@ -473,7 +492,7 @@ async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Pro
   if (results.some((r) => r.status === 'rejected')) {
     // hand the unfinished part to the normal queue + retry path
     console.warn('adoption push incomplete, queueing for retry');
-    for (const [date] of dates) dirtyDates.add(date);
+    for (const date of dates) dirtyDates.add(date);
     for (const d of deadlines) dirtyDeadlines.set(d.id, 'put');
     for (const s of subjects) dirtySubjects.set(s.id, 'put');
     for (const n of notes) dirtyNotes.set(n.id, 'put');
@@ -481,8 +500,9 @@ async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Pro
     scheduleSync();
     return false;
   }
+  const rated = dates.filter((d) => ratingOf(d) !== undefined).length;
   console.log(
-    `adopted local data as the initial cloud state: ${dates.length} days, ${deadlines.length} deadlines, ${subjects.length} subjects, ${notes.length} notes`,
+    `adopted local data as the initial cloud state: ${dates.length} days (${rated} rated), ${deadlines.length} deadlines, ${subjects.length} subjects, ${notes.length} notes`,
   );
   return true;
 }
@@ -504,6 +524,7 @@ async function readCloud(): Promise<boolean> {
     // serverWatermark is null until the first successful pull → full pull.
     const since = serverWatermark;
     let rawSessions: SessionsByDate | null;
+    let cloudRatings: RatingsByDate | undefined;
     let cloudDeadlines: Deadline[] | null;
     let cloudSubjects: Subject[] | null;
     let cloudNotes: Note[] | null;
@@ -513,6 +534,9 @@ async function readCloud(): Promise<boolean> {
     const incremental = all != null && Array.isArray(all.removedDates);
     if (all) {
       rawSessions = all.sessions;
+      // a worker predating ratings omits the field entirely — local ratings
+      // (dirty or not) must be left alone until a worker that knows them
+      if (all.ratings !== undefined) cloudRatings = all.ratings;
       cloudDeadlines = all.deadlines;
       cloudSubjects = all.subjects;
       cloudNotes = all.notes;
@@ -559,15 +583,22 @@ async function readCloud(): Promise<boolean> {
         if (incremental) {
           // never clobber a day this device still owes a push for: those edits
           // merge at flush time (mergeSessions), and the retry flush reads the
-          // store — replacing them with the older cloud copy would lose them
+          // store — replacing them with the older cloud copy would lose them.
+          // The same guard covers ratings: a dirty day's rating merges at
+          // flush time (newer ratingUpdatedAt wins).
           const changed = Object.fromEntries(
             Object.entries(rawSessions).filter(([date]) => !dirtyDates.has(date)),
           );
           const removed = (removedDates ?? []).filter((d) => !dirtyDates.has(d));
-          useSessionStore.getState().hydrateChanged(applyTombstones(changed), removed);
+          const ratingsChanged = cloudRatings
+            ? Object.fromEntries(
+                Object.entries(cloudRatings).filter(([date]) => !dirtyDates.has(date)),
+              )
+            : undefined;
+          useSessionStore.getState().hydrateChanged(applyTombstones(changed), removed, ratingsChanged);
         } else {
           const cloudSessions = applyTombstones(rawSessions);
-          useSessionStore.getState().hydrateAll(cloudSessions);
+          useSessionStore.getState().hydrateAll(cloudSessions, cloudRatings);
         }
       }
       if (cloudDeadlines) {
@@ -810,14 +841,26 @@ export async function ensureDateLoaded(date: DateKey): Promise<void> {
 
   try {
     const remote = await kvClient.getSession(cfg, date);
-    if (!remote || remote.length === 0) return;
+    if (!remote) return;
     // a deletion this device has not pushed yet stays deleted, even while
     // looking at the older server copy
-    const kept = applyTombstones({ [date]: remote })[date];
-    if (!kept || kept.length === 0) return;
+    const list = remote.sessions ?? [];
+    const kept = applyTombstones({ [date]: list })[date] ?? [];
     hydrationDepth++;
     try {
-      useSessionStore.getState().replaceForDate(date, kept);
+      if (kept.length > 0) {
+        useSessionStore.getState().replaceForDate(date, kept);
+      }
+      // a rating this device still owes a push for wins at flush time — don't
+      // let the older server copy overwrite it here
+      if (!dirtyDates.has(date)) {
+        useSessionStore.getState().adoptRating(
+          date,
+          remote.rating != null
+            ? { value: remote.rating, updatedAt: remote.ratingUpdatedAt ?? 0 }
+            : undefined,
+        );
+      }
     } finally {
       hydrationDepth--;
     }
@@ -883,6 +926,18 @@ function mergeSessions(
   return [...out.values()];
 }
 
+// Day-rating merge for the pull-before-push flush: newer updatedAt wins
+// (null = cleared, and a clear is a real value with a stamp). Local wins
+// ties so a just-made edit isn't undone by a same-millisecond remote write.
+function mergeRating(
+  local: RatingEntry | undefined,
+  remote: RatingEntry | undefined,
+): RatingEntry | undefined {
+  if (!local) return remote;
+  if (!remote) return local;
+  return (local.updatedAt ?? 0) >= (remote.updatedAt ?? 0) ? local : remote;
+}
+
 function flushDirty(): Promise<void> {
   if (flushPromise) return flushPromise;
   if (syncTimer) {
@@ -917,25 +972,43 @@ function flushDirty(): Promise<void> {
 
     for (const date of dates) {
       try {
-        const local: Session[] = useSessionStore.getState().sessions[date] ?? [];
+        const st = useSessionStore.getState();
+        const local: Session[] = st.sessions[date] ?? [];
+        const localRating: RatingEntry | undefined = st.ratings[date];
         const deleted = tombstones.get(date);
-        if (local.length === 0) {
+        // re-read the day so a stale client can't clobber newer cloud edits
+        const remote = await kvClient.getSession(cfg, date);
+        const remoteList = remote?.sessions ?? null;
+        const list = remoteList && remoteList.length ? mergeSessions(remoteList, local, deleted) : local;
+        // rating: newer updatedAt wins; the winner is written back below so
+        // both devices converge. Absent on both sides → nothing is sent and
+        // the server keeps whatever it has (its preserve rule).
+        const remoteRating: RatingEntry | undefined =
+          remote?.rating != null
+            ? { value: remote.rating, updatedAt: remote.ratingUpdatedAt ?? 0 }
+            : undefined;
+        const finalRating = mergeRating(localRating, remoteRating);
+        // a rating-only day (no sessions left) is a real day — only delete
+        // when there is neither a session nor a surviving rating to keep. A
+        // winning clear (value null) with no sessions also deletes the day.
+        if (list.length === 0 && (finalRating == null || finalRating.value == null)) {
           await kvClient.deleteSessionDate(cfg, date);
           // the whole day is gone server-side, so its tombstones are done
           tombstones.delete(date);
         } else {
-          // re-read the day so a stale client can't clobber newer cloud edits
-          const remote = await kvClient.getSession(cfg, date);
-          const list = remote && remote.length ? mergeSessions(remote, local, deleted) : local;
-          await kvClient.putSession(cfg, date, list);
-          if (remote && remote.length) {
-            // adopt anything the merge pulled in, without re-marking it dirty
-            hydrationDepth++;
-            try {
-              useSessionStore.getState().replaceForDate(date, list);
-            } finally {
-              hydrationDepth--;
-            }
+          await kvClient.putSession(cfg, date, list, finalRating);
+          // adopt anything the merge pulled in, without re-marking it dirty.
+          // A winning clear removes the entry so the store agrees with the
+          // server (which stores no rating at all after a clear).
+          hydrationDepth++;
+          try {
+            useSessionStore.getState().replaceForDate(date, list);
+            useSessionStore.getState().adoptRating(
+              date,
+              finalRating?.value != null ? finalRating : undefined,
+            );
+          } finally {
+            hydrationDepth--;
           }
         }
         // only drop the queued work once the write actually succeeded
@@ -1103,6 +1176,7 @@ export function waitForSaved(): Promise<'saved' | 'error'> {
 
 // ─────── store subscriptions ───────
 let prevSessionsRef: Record<string, Session[]> = {};
+let prevRatingsRef: RatingsByDate = {};
 let prevDeadlinesRef: Deadline[] = [];
 let prevSubjectsRef: Subject[] = [];
 let prevNotesRef: Note[] = [];
@@ -1124,6 +1198,21 @@ function diffSessions(curr: Record<string, Session[]>) {
     for (const id of currIds) if (!prevIds.has(id)) clearTombstone(k, id);
   }
   prevSessionsRef = curr;
+  if (changed) saveQueue();
+}
+
+// Ratings live in the session store but mark the same dirtyDates queue — the
+// flush pushes the whole day (sessions + rating) in one PUT, keyed by date.
+function diffRatings(curr: RatingsByDate) {
+  const prev = prevRatingsRef;
+  const keys = new Set([...Object.keys(curr), ...Object.keys(prev)]);
+  let changed = false;
+  for (const k of keys) {
+    if (curr[k] === prev[k]) continue;
+    dirtyDates.add(k);
+    changed = true;
+  }
+  prevRatingsRef = curr;
   if (changed) saveQueue();
 }
 
@@ -1196,6 +1285,7 @@ export function useCloudSync() {
 
     // seed refs with current state so first change correctly diffs
     prevSessionsRef = useSessionStore.getState().sessions;
+    prevRatingsRef = useSessionStore.getState().ratings;
     prevDeadlinesRef = useDeadlineStore.getState().deadlines;
     prevSubjectsRef = useSubjectStore.getState().subjects;
     prevNotesRef = useNoteStore.getState().notes;
@@ -1209,9 +1299,11 @@ export function useCloudSync() {
       refreshHasCache();
       if (isHydrating()) {
         prevSessionsRef = state.sessions;
+        prevRatingsRef = state.ratings;
         return;
       }
       diffSessions(state.sessions);
+      diffRatings(state.ratings);
       if (dirtyDates.size) scheduleSync();
     });
     const unsubDeadlines = useDeadlineStore.subscribe((state) => {

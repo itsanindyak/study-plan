@@ -9,8 +9,13 @@
 // days are reported via tombstones. The watermark returned is captured BEFORE
 // the list, so a write landing mid-pull is caught by the next pull — no gap.
 //
-// Response: { sessions, deadlines, subjects, notes, removedDates, updatedAt }
+// Response: { sessions, ratings, deadlines, subjects, notes, removedDates, updatedAt }
 //   sessions  → { "YYYY-MM-DD": [ session, ... ] }   (changed days only when since)
+//   ratings   → { "YYYY-MM-DD": { value: 1-10, updatedAt } } — extracted from the
+//               same day values just read, so it costs zero extra KV reads. In
+//               incremental mode only days included above appear here (a changed
+//               day's rating is always present if the server has one), so the
+//               client merges per-date (upsert), exactly like sessions.
 //   deadlines → [ deadline, ... ]        (legacy done:boolean normalized)
 //   subjects  → [ subject, ... ]
 //   notes     → [ {id,title,snippet,createdAt,updatedAt}, ... ]   (newest first)
@@ -23,6 +28,7 @@ import {
   NOTE_PREFIX,
   SDEL_PREFIX,
   listAllKeys,
+  normRating,
   normalizeRecord,
   sanitizeSubject,
   sanitizeNote,
@@ -84,12 +90,21 @@ export async function getAll(env, cors, since) {
   ]);
 
   const sessions = {};
+  const ratings = {};
   let totalSessions = 0;
   sessionNames.forEach((name, i) => {
     const date = idFrom(name, SESSION_PREFIX);
-    const list = (sessionVals[i] && sessionVals[i].sessions) || [];
+    const val = sessionVals[i] || {};
+    const list = val.sessions || [];
     sessions[date] = list.map(normalizeRecord);
     totalSessions += sessions[date].length;
+    const r = normRating(val.rating);
+    if (r !== undefined && r !== null && !Number.isNaN(r)) {
+      ratings[date] = {
+        value: r,
+        updatedAt: Number.isFinite(+val.ratingUpdatedAt) ? +val.ratingUpdatedAt : 0,
+      };
+    }
   });
 
   const deadlines = deadlineVals
@@ -124,11 +139,12 @@ export async function getAll(env, cors, since) {
 
   console.log(
     `getAll: ${sessionNames.length} days/${totalSessions} sessions, ` +
+      `${Object.keys(ratings).length} ratings, ` +
       `${deadlines.length} deadlines, ${subjects.length} subjects, ${notes.length} notes` +
       (incremental ? `, removed ${removedDates.length} days (since=${since})` : ` (full)`),
   );
   return json(
-    { sessions, deadlines, subjects, notes, removedDates, updatedAt: t0 },
+    { sessions, ratings, deadlines, subjects, notes, removedDates, updatedAt: t0 },
     200,
     cors,
   );

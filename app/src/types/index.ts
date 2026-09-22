@@ -17,6 +17,17 @@ export interface Session {
 
 export type SessionsByDate = Record<DateKey, Session[]>;
 
+// Day rating (1–10), stored inside the session day key ({ sessions, rating,
+// ratingUpdatedAt }) so it rides the day's metadata for incremental pulls.
+// value null = cleared locally, not yet flushed. updatedAt drives
+// last-write-wins between devices.
+export interface RatingEntry {
+  value: number | null;
+  updatedAt: number; // ms epoch
+}
+
+export type RatingsByDate = Record<DateKey, RatingEntry>;
+
 export interface Deadline {
   id: string;
   title: string;

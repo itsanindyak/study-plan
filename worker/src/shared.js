@@ -119,7 +119,23 @@ export function computeExpiration(dueDate) {
   return Math.max(Math.floor(Date.now() / 1000) + 60, deleteAtSec);
 }
 
-// ─── id generator ─────────────────────────────────────────────
+// ─── day rating (1–10) ──────────────────────────────────────────
+// Ratings live inside the session day key ({ sessions, rating,
+// ratingUpdatedAt }) so they ride the day's metadata for incremental pulls
+// with zero extra keys or reads. Returns the cleaned value, or:
+//   undefined → field absent (keep whatever the server has)
+//   null      → explicitly cleared
+//   NaN       → invalid (caller rejects with 400)
+export function normRating(v) {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v === "boolean") return NaN;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 10) return NaN;
+  return n;
+}
+
+// ─── id generator ──────────────────────────────────────────────
 
 export function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);

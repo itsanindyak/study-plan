@@ -61,6 +61,83 @@
 .day-chip.active .dc-bar {
   background: rgba(255, 255, 255, 0.15);
 }
+/* day rating badge: tiny number in the chip corner (display only — the chip
+   click still just selects the day) */
+.day-chip .dc-rate {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ─────── rating popup ─────── */
+.rate-num {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 600;
+  font-size: 2.4rem;
+  letter-spacing: -0.02em;
+  text-align: center;
+  line-height: 1;
+  margin-bottom: 1rem;
+}
+.rate-num .rate-denom {
+  font-size: 1rem;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.rate-bar {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  margin-bottom: 1rem;
+}
+.rate-seg {
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-3);
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
+}
+.rate-seg:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-2px);
+}
+.rate-seg.lit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.rate-clear {
+  display: block;
+  margin: 0 auto;
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-3);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rate-clear:hover {
+  color: var(--text);
+}
 
 /* ─────── sessions list ─────── */
 .sessions {

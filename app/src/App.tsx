@@ -9,6 +9,7 @@ import { DeadlinesView } from '@/features/deadlines/DeadlinesView';
 import { Timeline } from '@/features/timeline/Timeline';
 import { WeeklyScheduleModal } from '@/features/timeline/WeeklyScheduleModal';
 import { SessionPopup } from '@/components/SessionPopup';
+import { RatingPopup } from '@/components/RatingPopup';
 import { SettingsModal } from '@/features/settings/SettingsModal';
 import { NotesPage } from '@/features/notes/NotesPage';
 import { NoteView } from '@/features/notes/NoteView';
@@ -29,6 +30,7 @@ export function App() {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(todayMondayIndex());
 
   const [openSession, setOpenSession] = useState<{ date: string; session: Session } | null>(null);
+  const [ratingDate, setRatingDate] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [weeklyOpen, setWeeklyOpen] = useState(false);
 
@@ -54,6 +56,7 @@ export function App() {
   }, [weekStart]);
 
   const daySessions = useSessionStore((s) => s.sessions[selectedKey]) ?? [];
+  const dayRating = useSessionStore((s) => s.ratings[selectedKey]?.value ?? null);
 
   const { totalMin, completedMin } = useMemo(() => {
     let tMin = 0;
@@ -168,11 +171,18 @@ export function App() {
                 {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]}
               </span>
             </h2>
-            <span className="count">
-              {daySessions.length === 0
-                ? 'no sessions'
-                : `${daySessions.length} session${daySessions.length === 1 ? '' : 's'} · ${daySessions.filter((s) => s.status === 'done').length} done`}
-            </span>
+            <button
+              type="button"
+              className="day-rate-btn"
+              onClick={() => setRatingDate(selectedKey)}
+              title={
+                dayRating != null
+                  ? `Day rated ${dayRating}/10 — click to change`
+                  : 'Rate this day'
+              }
+            >
+              ★ {dayRating != null ? `${dayRating}/10` : 'rate'}
+            </button>
           </div>
 
           <SessionList
@@ -249,6 +259,13 @@ export function App() {
             date={openSession.date}
             session={openSession.session}
             onClose={() => setOpenSession(null)}
+          />
+        )}
+        {ratingDate && (
+          <RatingPopup
+            key="rating-popup"
+            date={ratingDate}
+            onClose={() => setRatingDate(null)}
           />
         )}
       </AnimatePresence>

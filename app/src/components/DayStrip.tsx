@@ -12,6 +12,7 @@ export function DayStrip({
   onSelect: (i: number) => void;
 }) {
   const sessions = useSessionStore((s) => s.sessions);
+  const ratings = useSessionStore((s) => s.ratings);
 
   return (
     <div className="day-strip" id="dayStrip">
@@ -24,6 +25,7 @@ export function DayStrip({
         const pct = total > 0 ? (done / total) * 100 : 0;
         const isSelected = i === selectedDayIndex;
         const today = isToday(date);
+        const rating = ratings[key]?.value ?? null;
 
         return (
           <button
@@ -37,6 +39,11 @@ export function DayStrip({
           >
             <div className="dc-name">{DAYS_SHORT[i]}</div>
             <div className="dc-num">{date.getDate()}</div>
+            {rating != null && (
+              <div className="dc-rate" title={`Rated ${rating}/10`}>
+                {rating}
+              </div>
+            )}
             <div className="dc-bar">
               <div className="dc-bar-fill" style={{ width: `${pct}%` }} />
             </div>

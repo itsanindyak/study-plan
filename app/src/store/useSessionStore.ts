@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { DateKey, Session, SessionsByDate, TaskStatus } from '@/types';
+import type { DateKey, RatingEntry, RatingsByDate, Session, SessionsByDate, TaskStatus } from '@/types';
 import { newId } from '@/lib/id';
 import { addDays, dateKey } from '@/lib/date';
 import { pinnedDates } from '@/lib/cachePins';
@@ -10,6 +10,9 @@ import { useSubjectStore } from '@/store/useSubjectStore';
 
 interface SessionState {
   sessions: SessionsByDate;
+  // day ratings (1–10), keyed by date. A null value is a locally-cleared
+  // rating waiting to be flushed — the UI treats it as unrated.
+  ratings: RatingsByDate;
 
   // selectors
   getByDate: (date: DateKey) => Session[];
@@ -33,10 +36,19 @@ interface SessionState {
   ) => void;
   replaceForDate: (date: DateKey, list: Session[]) => void;
 
+  // rating actions
+  setRating: (date: DateKey, value: number | null) => void;
+  // adopt a post-merge rating without stamping (flush + on-demand loads call
+  // this under the hydration guard so it never re-marks the date dirty).
+  // undefined removes the entry (server has no rating for the day).
+  adoptRating: (date: DateKey, entry: RatingEntry | undefined) => void;
+
   // cloud hydration
-  hydrateAll: (cloud: SessionsByDate) => void;
-  // incremental pull: replace only the changed days, drop server-deleted days
-  hydrateChanged: (changed: SessionsByDate, removedDates: DateKey[]) => void;
+  hydrateAll: (cloud: SessionsByDate, cloudRatings?: RatingsByDate) => void;
+  // incremental pull: replace only the changed days, drop server-deleted days.
+  // cloudRatings covers only changed days (upsert semantics): a changed day
+  // missing from it means the server has no rating, so the local one goes.
+  hydrateChanged: (changed: SessionsByDate, removedDates: DateKey[], cloudRatings?: RatingsByDate) => void;
 }
 
 // localStorage keeps only recent days; the database keeps everything and older
@@ -64,10 +76,28 @@ function cacheWindow(sessions: SessionsByDate): SessionsByDate {
   return out;
 }
 
+// Ratings are tiny (a few bytes per rated day) so the whole map persists —
+// no cache window. Drop anything malformed (foreign cache, old shape) rather
+// than flushing garbage. Null-valued entries are pending clears: keep them,
+// the flush turns them into an explicit server-side clear.
+function normalizeRatingEntry(e: unknown): RatingEntry | null {
+  if (!e || typeof e !== 'object') return null;
+  const r = e as { value?: unknown; updatedAt?: unknown };
+  if (r.value !== null) {
+    if (!Number.isInteger(r.value) || (r.value as number) < 1 || (r.value as number) > 10) {
+      return null;
+    }
+  }
+  const updatedAt = Number(r.updatedAt);
+  if (!Number.isFinite(updatedAt)) return null;
+  return { value: r.value as number | null, updatedAt };
+}
+
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
       sessions: {},
+      ratings: {},
 
       getByDate: (date) => get().sessions[date] ?? [],
 
@@ -173,17 +203,43 @@ export const useSessionStore = create<SessionState>()(
           return { sessions };
         }),
 
-      hydrateAll: (cloud) => {
+      setRating: (date, value) =>
+        set((s) => {
+          const curr = s.ratings[date];
+          // no-op when already there, so we don't stamp updatedAt or push to cloud
+          if (curr && curr.value === value) return s;
+          return {
+            ratings: { ...s.ratings, [date]: { value, updatedAt: Date.now() } },
+          };
+        }),
+
+      adoptRating: (date, entry) =>
+        set((s) => {
+          if (entry === undefined) {
+            if (!(date in s.ratings)) return s;
+            const ratings = { ...s.ratings };
+            delete ratings[date];
+            return { ratings };
+          }
+          return { ratings: { ...s.ratings, [date]: entry } };
+        }),
+
+      hydrateAll: (cloud, cloudRatings) => {
         const sessions: SessionsByDate = {};
         for (const [date, list] of Object.entries(cloud ?? {})) {
           sessions[date] = byStartTime(
             (list ?? []).map(normalizeSession).filter((s): s is Session => s !== null),
           );
         }
-        set({ sessions });
+        const ratings: RatingsByDate = {};
+        for (const [date, entry] of Object.entries(cloudRatings ?? {})) {
+          const clean = normalizeRatingEntry(entry);
+          if (clean && clean.value !== null) ratings[date] = clean;
+        }
+        set({ sessions, ratings });
       },
 
-      hydrateChanged: (changed, removedDates) => {
+      hydrateChanged: (changed, removedDates, cloudRatings) => {
         set((s) => {
           const sessions = { ...s.sessions };
           for (const [date, list] of Object.entries(changed ?? {})) {
@@ -191,14 +247,32 @@ export const useSessionStore = create<SessionState>()(
               (list ?? []).map(normalizeSession).filter((x): x is Session => x !== null),
             );
           }
-          for (const date of removedDates ?? []) delete sessions[date];
-          return { sessions };
+          const ratings = { ...s.ratings };
+          for (const date of removedDates ?? []) {
+            delete sessions[date];
+            delete ratings[date];
+          }
+          if (cloudRatings) {
+            for (const [date, entry] of Object.entries(cloudRatings)) {
+              const clean = normalizeRatingEntry(entry);
+              if (clean && clean.value !== null) ratings[date] = clean;
+              else delete ratings[date];
+            }
+            // a changed day absent from the map has no server rating (the
+            // worker always includes one when it has it), so the local one
+            // was cleared elsewhere — drop it. Dirty dates never reach here:
+            // the caller filters them first.
+            for (const date of Object.keys(changed ?? {})) {
+              if (!(date in cloudRatings)) delete ratings[date];
+            }
+          }
+          return { sessions, ratings };
         });
       },
     }),
     {
       name: 'studyplan_sessions',
-      partialize: (s) => ({ sessions: cacheWindow(s.sessions) }),
+      partialize: (s) => ({ sessions: cacheWindow(s.sessions), ratings: s.ratings }),
       // migrate legacy `done: boolean` records out of localStorage on rehydrate
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SessionState>;
@@ -209,7 +283,12 @@ export const useSessionStore = create<SessionState>()(
             (list ?? []).map(normalizeSession).filter((s): s is Session => s !== null),
           );
         }
-        return { ...current, sessions };
+        const ratings: RatingsByDate = {};
+        for (const [date, entry] of Object.entries(p.ratings ?? {})) {
+          const clean = normalizeRatingEntry(entry);
+          if (clean) ratings[date] = clean;
+        }
+        return { ...current, sessions, ratings };
       },
     },
   ),

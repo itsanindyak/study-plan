@@ -7,6 +7,7 @@ import type {
   DateKey,
   Deadline,
   Note,
+  RatingEntry,
   Session,
   SessionsByDate,
   Subject,
@@ -54,18 +55,44 @@ export const kvClient = {
     return res?.items ?? null;
   },
 
-  async getSession(cfg: CloudConfig, date: DateKey): Promise<Session[] | null> {
-    const res = await request<{ sessions: Session[]; updatedAt: number }>(
-      cfg,
-      `/api/sessions/${date}`,
-    );
-    return res?.sessions ?? null;
+  // Day payload: sessions plus the day's 1–10 rating when the server has
+  // one. The rating rides inside the session key — zero extra reads.
+  async getSession(cfg: CloudConfig, date: DateKey): Promise<{
+    sessions: Session[];
+    rating?: number;
+    ratingUpdatedAt?: number;
+  } | null> {
+    const res = await request<{
+      sessions: Session[];
+      rating?: number;
+      ratingUpdatedAt?: number;
+      updatedAt: number;
+    }>(cfg, `/api/sessions/${date}`);
+    if (!res) return null;
+    return {
+      sessions: res.sessions,
+      ...(typeof res.rating === 'number' ? { rating: res.rating } : {}),
+      ...(typeof res.ratingUpdatedAt === 'number' ? { ratingUpdatedAt: res.ratingUpdatedAt } : {}),
+    };
   },
 
-  async putSession(cfg: CloudConfig, date: DateKey, sessions: Session[]): Promise<void> {
+  // rating is tri-state, mirroring the worker: undefined omits the field
+  // (server keeps what it has), null clears, a value sets. Pass undefined
+  // unless the caller resolved the local/remote winner first.
+  async putSession(
+    cfg: CloudConfig,
+    date: DateKey,
+    sessions: Session[],
+    rating?: RatingEntry | undefined,
+  ): Promise<void> {
     await request(cfg, `/api/sessions/${date}`, {
       method: 'PUT',
-      body: JSON.stringify({ sessions }),
+      body: JSON.stringify({
+        sessions,
+        ...(rating !== undefined
+          ? { rating: rating.value, ratingUpdatedAt: rating.updatedAt }
+          : {}),
+      }),
     });
   },
 
@@ -154,11 +181,15 @@ export const kvClient = {
   // With `since` (the client's last watermark) the server value-reads only
   // days changed after it and reports deleted days in `removedDates` (absent
   // entirely on a legacy worker — the caller's cue to do a full merge).
+  // `ratings` rides inside the day values at zero extra cost; in incremental
+  // mode it covers only changed days (upsert semantics, like sessions). A
+  // legacy worker omits it entirely — the caller must not touch local ratings.
   async getAll(
     cfg: CloudConfig,
     since?: number | null,
   ): Promise<{
     sessions: SessionsByDate;
+    ratings?: Record<DateKey, { value: number; updatedAt: number }>;
     deadlines: Deadline[];
     subjects: Subject[];
     notes: Note[];
@@ -168,6 +199,7 @@ export const kvClient = {
     const path = since != null && Number.isFinite(since) ? `/api/all?since=${since}` : '/api/all';
     return request<{
       sessions: SessionsByDate;
+      ratings?: Record<DateKey, { value: number; updatedAt: number }>;
       deadlines: Deadline[];
       subjects: Subject[];
       notes: Note[];

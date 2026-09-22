@@ -1,5 +1,8 @@
 // Session route handlers.
-// KV key: session:YYYY-MM-DD  →  { sessions: [...] }
+// KV key: session:YYYY-MM-DD  →  { sessions: [...], rating?, ratingUpdatedAt? }
+// The day's 1–10 rating rides inside the same key: rating-only days store an
+// empty sessions list, and any PUT bumps the key metadata so incremental
+// pulls (`GET /api/all?since=`) pick rating changes up for free.
 
 import {
   SESSION_PREFIX,
@@ -10,6 +13,7 @@ import {
   listAllKeys,
   json,
   errResponse,
+  normRating,
   sanitizeSession,
   normalizeRecord,
 } from "./shared.js";
@@ -46,18 +50,31 @@ export async function getAllSessions(env, cors) {
   return json({ sessions, updatedAt: Date.now() }, 200, cors);
 }
 
-// GET /api/sessions/:date  →  { sessions: [...], updatedAt }  (404 if no data)
+// GET /api/sessions/:date  →  { sessions: [...], rating?, ratingUpdatedAt?, updatedAt }  (404 if no data)
 export async function getSession(date, env, cors) {
   const raw = await env.STUDY_KV.get(sessionKey(date), { type: "json", cacheTtl: 60 });
   if (!raw) return errResponse(404, "no sessions for that date", cors);
   const sessions = (raw.sessions || []).map(normalizeRecord);
-  return json({ sessions, updatedAt: Date.now() }, 200, cors);
+  const out = { sessions, updatedAt: Date.now() };
+  const rating = normRating(raw.rating);
+  if (rating !== undefined && !Number.isNaN(rating)) {
+    out.rating = rating;
+    if (Number.isFinite(+raw.ratingUpdatedAt)) out.ratingUpdatedAt = +raw.ratingUpdatedAt;
+  }
+  return json(out, 200, cors);
 }
 
-// PUT /api/sessions/:date  body: { sessions: [...] }  →  { ok, updatedAt, sessions }
+// PUT /api/sessions/:date  body: { sessions: [...], rating?: 1-10|null, ratingUpdatedAt?: number }
+//   →  { ok, updatedAt, sessions, rating?, ratingUpdatedAt? }
 // Body is authoritative: the server replaces its state for this date with
 // the client's list. Items in server but not in body are removed (handles
 // deletes and removes).
+//
+// Rating semantics: the field is tri-state — ABSENT means "keep whatever the
+// server has" (so an old client flushing { sessions } can never wipe a
+// rating), `null` explicitly clears, a number 1–10 sets. The client owns
+// last-write-wins via ratingUpdatedAt: it re-reads the day before flushing
+// and sends the newer of local/remote, same merge as the session list.
 //
 // Multi-device safety: clients always bootFromCloud (which pulls remote
 // edits into localStorage) before any PUT, so the body reflects the merged
@@ -79,21 +96,53 @@ export async function putSession(date, body, env, cors) {
     (a.time || "").localeCompare(b.time || "")
   );
 
+  // rating: absent → preserve the stored one; null → clear; 1–10 → set.
+  // (Reads the existing key only when preserving — set/clear are wholesale.)
+  const rating = normRating(body.rating);
+  if (Number.isNaN(rating)) {
+    console.warn(`putSession[${date}]: rejected — rating must be 1-10 or null`);
+    return errResponse(400, "rating must be an integer 1-10 or null", cors);
+  }
+  let ratingOut;
+  let ratingStampOut;
+  if (rating === undefined) {
+    const existing = await env.STUDY_KV.get(sessionKey(date), { type: "json" });
+    const kept = normRating(existing?.rating);
+    if (kept !== undefined && !Number.isNaN(kept) && kept !== null) {
+      ratingOut = kept;
+      if (Number.isFinite(+existing?.ratingUpdatedAt)) ratingStampOut = +existing.ratingUpdatedAt;
+    }
+  } else if (rating !== null) {
+    ratingOut = rating;
+    ratingStampOut = Number.isFinite(+body.ratingUpdatedAt) ? +body.ratingUpdatedAt : Date.now();
+  }
+
+  const stored = { sessions: sorted };
+  if (ratingOut !== undefined) {
+    stored.rating = ratingOut;
+    if (ratingStampOut !== undefined) stored.ratingUpdatedAt = ratingStampOut;
+  }
+
   // updatedAt rides in key metadata (free with list) so incremental pulls
   // (`GET /api/all?since=`) can detect changed days without reading values
   await env.STUDY_KV.put(
     sessionKey(date),
-    JSON.stringify({ sessions: sorted }),
+    JSON.stringify(stored),
     { metadata: { updatedAt: Date.now() } }
   );
 
   if (dropped > 0) {
     console.warn(`putSession[${date}]: stored ${sorted.length}, dropped ${dropped} invalid items`);
   } else {
-    console.log(`putSession[${date}]: stored ${sorted.length} sessions`);
+    console.log(`putSession[${date}]: stored ${sorted.length} sessions${ratingOut !== undefined ? `, rating ${ratingOut}` : ""}`);
   }
 
-  return json({ ok: true, updatedAt: Date.now(), sessions: sorted }, 200, cors);
+  const out = { ok: true, updatedAt: Date.now(), sessions: sorted };
+  if (ratingOut !== undefined) {
+    out.rating = ratingOut;
+    if (ratingStampOut !== undefined) out.ratingUpdatedAt = ratingStampOut;
+  }
+  return json(out, 200, cors);
 }
 
 // DELETE /api/sessions/:date  →  { ok }
