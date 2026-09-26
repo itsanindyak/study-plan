@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CloudConfig } from '@/types';
 
-const DEFAULT_WORKER_URL = 'https://study-worker.anindya.online';
+const DEFAULT_WORKER_URL = 'https://study-plan.iankoley04.workers.dev';
 
 interface SettingsState {
   token: string;
