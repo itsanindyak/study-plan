@@ -1,38 +1,38 @@
 import { useMemo } from 'react';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
-import { STATUS_RANK } from '@/lib/status';
 import { DeadlineCard } from './DeadlineCard';
 
 export function DeadlinesView() {
   const deadlines = useDeadlineStore((s) => s.deadlines);
 
-  const active = useMemo(
-    () => deadlines.filter((d) => d.status === 'pending'),
+  // the persistent list is the *active* board — resolved deadlines (done or
+  // notdone) leave it and surface contextually on their day instead.
+  const pending = useMemo(
+    () =>
+      deadlines
+        .filter((d) => d.status === 'pending')
+        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')),
     [deadlines],
   );
-
-  const sorted = useMemo(() => {
-    return [...deadlines].sort((a, b) => {
-      const rank = STATUS_RANK[a.status] - STATUS_RANK[b.status];
-      if (rank !== 0) return rank;
-      return (a.dueDate || '').localeCompare(b.dueDate || '');
-    });
-  }, [deadlines]);
 
   return (
     <div className="deadlines" id="deadlinesSection">
       <div className="deadlines-head">
         <div className="deadlines-title">
           <h2>deadlines</h2>
-          <span className="dt-count">{active.length}</span>
+          <span className="dt-count">{pending.length}</span>
         </div>
       </div>
 
       <div className="deadlines-list">
-        {deadlines.length === 0 ? (
-          <div className="deadlines-empty">No deadlines yet — add one below.</div>
+        {pending.length === 0 ? (
+          <div className="deadlines-empty">
+            {deadlines.length === 0
+              ? 'No deadlines yet — add one below.'
+              : 'all caught up — no pending deadlines.'}
+          </div>
         ) : (
-          sorted.map((d, idx) => (
+          pending.map((d, idx) => (
             <div key={d.id} style={{ animationDelay: `${idx * 0.04}s` }}>
               <DeadlineCard deadline={d} origIdx={idx} />
             </div>

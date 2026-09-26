@@ -6,6 +6,7 @@
 //   note:{id}           →  { id, title, snippet, text, createdAt, updatedAt }   (notepad, no TTL;
 //                          title/snippet/timestamps also ride in the key's KV metadata so the
 //                          list endpoint needs one `list` and no value reads)
+//   quote:current       →  { text, updatedAt }   (one editable line beside the logo, no TTL)
 // status is 'pending' | 'done' | 'notdone' (legacy rows with done:boolean are normalized on read).
 //
 // Auth: Bearer token from env.SECRET_TOKEN.
@@ -42,6 +43,7 @@ import {
   deleteNote,
   getNote,
 } from "./notes.js";
+import { getQuote, putQuote } from "./quote.js";
 import { getAll } from "./all.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -188,6 +190,16 @@ export default {
         return putNote(id, body, env, cors);
       }
       if (request.method === "DELETE") return deleteNote(id, env, cors);
+      return errResponse(405, "Method not allowed", cors);
+    }
+
+    if (path === "/api/quote") {
+      if (request.method === "GET") return getQuote(env, cors);
+      if (request.method === "PUT") {
+        const { body, error } = await readJsonBody(request, cors);
+        if (error) return error;
+        return putQuote(body, env, cors);
+      }
       return errResponse(405, "Method not allowed", cors);
     }
 

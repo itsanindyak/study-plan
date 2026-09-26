@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import type { DateKey } from '@/types';
-import { Clock } from './Clock';
+import { QuoteCard } from './QuoteCard';
 
 export function BentoStats({ weekStart, selectedKey }: { weekStart: Date; selectedKey: string }) {
   const sessions = useSessionStore((s) => s.sessions);
@@ -73,7 +73,7 @@ export function BentoStats({ weekStart, selectedKey }: { weekStart: Date; select
         </div>
       </div>
 
-      <Clock />
+      <QuoteCard variant="accent" />
 
       <div className="bento-card featured">
         <div className="bento-label">

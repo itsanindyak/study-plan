@@ -9,8 +9,10 @@ export const SDEL_TTL_SEC = 30 * 86400;
 export const DEADLINE_PREFIX = "deadline:";
 export const SUBJECT_PREFIX = "subject:";
 export const NOTE_PREFIX = "note:";
+export const QUOTE_PREFIX = "quote:";
 export const MAX_BODY_BYTES = 256 * 1024; // 256 KB per request — plenty for a personal planner
 export const MAX_NOTE_CHARS = 64 * 1024; // one note's body; title is derived client-side
+export const MAX_QUOTE_CHARS = 280; // the quote is a single short line
 
 // ─── CORS / origin ────────────────────────────────────────────
 
@@ -86,6 +88,9 @@ export function subjectKey(id) {
 }
 export function noteKey(id) {
   return NOTE_PREFIX + id;
+}
+export function quoteKey(id) {
+  return QUOTE_PREFIX + id;
 }
 export function dateFromSessionKey(k) {
   return k.slice(SESSION_PREFIX.length);
@@ -189,7 +194,7 @@ export function sanitizeDeadline(d) {
   if (!d || typeof d !== "object") return null;
   if (typeof d.title !== "string" || typeof d.dueDate !== "string") return null;
   const createdAt = Number.isFinite(+d.createdAt) ? +d.createdAt : Date.now();
-  return {
+  const out = {
     id: typeof d.id === "string" && d.id ? d.id : newId(),
     title: d.title,
     dueDate: d.dueDate,
@@ -199,6 +204,10 @@ export function sanitizeDeadline(d) {
     // last-write-wins marker; legacy rows have none, so fall back to createdAt
     updatedAt: Number.isFinite(+d.updatedAt) ? +d.updatedAt : createdAt,
   };
+  // when a deadline was actually completed (may differ from its due date);
+  // kept so the client can place it on the completion day too
+  if (Number.isFinite(+d.completedAt)) out.completedAt = +d.completedAt;
+  return out;
 }
 
 // Whitelist what we actually persist so callers can't slip in extra fields.
@@ -265,5 +274,18 @@ export function sanitizeNote(n) {
     createdAt,
     // last-write-wins marker, like deadlines/subjects
     updatedAt: Number.isFinite(+n.updatedAt) ? +n.updatedAt : createdAt,
+  };
+}
+
+// The quote is one fixed line (key quote:current). Empty text is a real
+// value — that's how it gets cleared — and still carries a stamp so
+// last-write-wins works across devices that set and clear it.
+export function sanitizeQuote(q) {
+  if (!q || typeof q !== "object") return null;
+  if (typeof q.text !== "string") return null;
+  const trimmed = q.text.trim();
+  return {
+    text: trimmed.length > MAX_QUOTE_CHARS ? trimmed.slice(0, MAX_QUOTE_CHARS) : trimmed,
+    updatedAt: Number.isFinite(+q.updatedAt) ? +q.updatedAt : Date.now(),
   };
 }

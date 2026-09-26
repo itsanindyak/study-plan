@@ -8,6 +8,7 @@ import { statusGradient } from '@/lib/color';
 import { STATUS_RANK } from '@/lib/status';
 import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import { DeadlineBanner } from '@/features/sessions/DeadlineBanner';
+import { dateKeyFromTs, type DayDeadline } from '@/lib/deadlines';
 import type { Session } from '@/types';
 
 const TL_START = 6;
@@ -31,16 +32,25 @@ export function WeeklyScheduleModal({
   const colorMap = useSubjectColorMap();
 
   // Date-keyed buckets so each day header can show its own count and popup.
+  // A done deadline also lands on the day it was completed when that day differs
+  // from its due date, mirroring `deadlinesForDay` in SessionList.
   const deadlinesByDay = useMemo(() => {
-    const map = new Map<string, typeof deadlines>();
+    const map = new Map<string, DayDeadline[]>();
+    const push = (key: string, item: DayDeadline) => {
+      const list = map.get(key);
+      if (list) list.push(item);
+      else map.set(key, [item]);
+    };
     for (const d of deadlines) {
-      const list = map.get(d.dueDate);
-      if (list) list.push(d);
-      else map.set(d.dueDate, [d]);
+      push(d.dueDate, { deadline: d, context: 'due' });
+      if (d.status === 'done' && d.completedAt != null) {
+        const ck = dateKeyFromTs(d.completedAt);
+        if (ck !== d.dueDate) push(ck, { deadline: d, context: 'completion' });
+      }
     }
     // pending first, resolved last — same ordering as SessionList
     for (const list of map.values()) {
-      list.sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status]);
+      list.sort((a, b) => STATUS_RANK[a.deadline.status] - STATUS_RANK[b.deadline.status]);
     }
     return map;
   }, [deadlines]);
@@ -137,7 +147,7 @@ export function WeeklyScheduleModal({
                       className={
                         'wdh-deadlines' +
                         (deadlinePop?.date === key ? ' open' : '') +
-                        (dayDeadlines.some((d) => d.status === 'pending') ? ' has-pending' : '')
+                        (dayDeadlines.some((x) => x.deadline.status === 'pending') ? ' has-pending' : '')
                       }
                       onClick={(e) => toggleDeadlinePop(key, e)}
                       aria-expanded={deadlinePop?.date === key}
@@ -261,8 +271,8 @@ export function WeeklyScheduleModal({
             </button>
           </div>
           <div className="deadline-pop-list">
-            {(deadlinesByDay.get(deadlinePop.date) ?? []).map((d) => (
-              <DeadlineBanner key={d.id} deadline={d} />
+            {(deadlinesByDay.get(deadlinePop.date) ?? []).map(({ deadline, context }) => (
+              <DeadlineBanner key={deadline.id} deadline={deadline} context={context} />
             ))}
           </div>
         </div>

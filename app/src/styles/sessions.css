@@ -610,6 +610,11 @@
   color: var(--accent);
   font-weight: 600;
 }
+.dl-banner-was-due {
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.75;
+}
 .dl-banner-check {
   width: 30px;
   height: 30px;

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Brand } from './Brand';
+import { Clock } from './Clock';
 
 interface HeaderLeftProps {
   actionLabel?: string;
@@ -20,6 +21,7 @@ export function HeaderLeft({
   return (
     <div className={cls}>
       <Brand />
+      <Clock compact />
       {onAction && (
         <button
           type="button"

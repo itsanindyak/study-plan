@@ -7,6 +7,7 @@ import type {
   DateKey,
   Deadline,
   Note,
+  Quote,
   RatingEntry,
   Session,
   SessionsByDate,
@@ -175,6 +176,24 @@ export const kvClient = {
     await request(cfg, `/api/notes/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
 
+  async getQuote(cfg: CloudConfig): Promise<Quote | null> {
+    const res = await request<{ quote: Quote | null; updatedAt: number }>(cfg, '/api/quote');
+    return res?.quote ?? null;
+  },
+
+  // LWW on updatedAt; older write returns { ok:false, stale:true, item }.
+  // Empty text is a real value (that's how the quote is cleared) and still
+  // carries a stamp.
+  async putQuote(
+    cfg: CloudConfig,
+    q: Quote,
+  ): Promise<{ ok: boolean; stale?: boolean; item?: Quote } | null> {
+    return request<{ ok: boolean; stale?: boolean; item?: Quote }>(cfg, '/api/quote', {
+      method: 'PUT',
+      body: JSON.stringify(q),
+    });
+  },
+
   // Whole-plan snapshot in one request (single namespace list server-side).
   // Returns null on 404 — an older worker without /api/all — and the caller
   // falls back to the four per-collection requests.
@@ -184,6 +203,8 @@ export const kvClient = {
   // `ratings` rides inside the day values at zero extra cost; in incremental
   // mode it covers only changed days (upsert semantics, like sessions). A
   // legacy worker omits it entirely — the caller must not touch local ratings.
+  // Same for `quote` — absent on a legacy worker, and the caller must leave
+  // the local quote alone then.
   async getAll(
     cfg: CloudConfig,
     since?: number | null,
@@ -193,6 +214,7 @@ export const kvClient = {
     deadlines: Deadline[];
     subjects: Subject[];
     notes: Note[];
+    quote?: Quote | null;
     removedDates?: string[];
     updatedAt: number;
   } | null> {
@@ -203,6 +225,7 @@ export const kvClient = {
       deadlines: Deadline[];
       subjects: Subject[];
       notes: Note[];
+      quote?: Quote | null;
       removedDates?: string[];
       updatedAt: number;
     }>(cfg, path);

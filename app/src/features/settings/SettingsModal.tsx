@@ -3,12 +3,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSettingsStore, selectIsConfigured } from '@/store/useSettingsStore';
 import { useSubjectStore } from '@/store/useSubjectStore';
 import { useSessionStore } from '@/store/useSessionStore';
+import { useQuoteStore } from '@/store/useQuoteStore';
 import { normalize as normalizeName, suggestColor } from '@/lib/subjects';
 import { ColorMenu } from '@/components/ColorMenu';
 import { kvClient } from '../sync/kvClient';
 
 type Status = { kind: 'idle' | 'ok' | 'err'; text: string };
-type Tab = 'cloud' | 'subjects';
+type Tab = 'cloud' | 'subjects' | 'quote';
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('cloud');
@@ -69,9 +70,19 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               >
                 subjects
               </button>
+              <button
+                role="tab"
+                aria-selected={tab === 'quote'}
+                className={'settings-tab' + (tab === 'quote' ? ' active' : '')}
+                onClick={() => setTab('quote')}
+              >
+                quote
+              </button>
             </div>
 
-            {tab === 'cloud' ? <CloudTab onClose={onClose} /> : <SubjectsTab />}
+            {tab === 'cloud' && <CloudTab onClose={onClose} />}
+            {tab === 'subjects' && <SubjectsTab />}
+            {tab === 'quote' && <QuoteTab />}
           </motion.div>
         </motion.div>
       )}
@@ -366,5 +377,63 @@ function SubjectRow({
         ✕
       </button>
     </li>
+  );
+}
+
+// ─────── quote tab ───────
+
+const QUOTE_MAX_CHARS = 120;
+
+function QuoteTab() {
+  const text = useQuoteStore((s) => s.text);
+  const [draft, setDraft] = useState(text);
+  const [status, setStatus] = useState<Status>({ kind: 'idle', text: '' });
+  useEffect(() => setDraft(text), [text]);
+
+  // setText bumps updatedAt and the store subscription queues the cloud push
+  const save = () => {
+    useQuoteStore.getState().setText(draft);
+    setStatus({ kind: 'ok', text: 'saved ✓' });
+  };
+
+  const clear = () => {
+    setDraft('');
+    useQuoteStore.getState().setText('');
+    setStatus({ kind: 'ok', text: 'cleared ✓' });
+  };
+
+  return (
+    <div className="settings-body">
+      <p className="settings-intro">
+        one line shown beside the logo in the topbar — a mantra, a reminder, a
+        favorite quote. clear it to hide the section. synced to every device.
+      </p>
+
+      <label className="settings-label">
+        <span>quote</span>
+        <input
+          type="text"
+          value={draft}
+          placeholder="e.g. deep work beats busy work"
+          maxLength={QUOTE_MAX_CHARS}
+          spellCheck={false}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+        />
+      </label>
+
+      <div className={`settings-status ${status.kind === 'ok' ? 'ok' : status.kind === 'err' ? 'err' : ''}`}>
+        {status.text}
+      </div>
+
+      <div className="settings-actions">
+        <button className="settings-btn settings-btn-ghost" onClick={clear}>
+          clear
+        </button>
+        <button className="settings-btn settings-btn-primary" onClick={save}>
+          save
+        </button>
+      </div>
+    </div>
   );
 }

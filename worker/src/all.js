@@ -9,7 +9,7 @@
 // days are reported via tombstones. The watermark returned is captured BEFORE
 // the list, so a write landing mid-pull is caught by the next pull — no gap.
 //
-// Response: { sessions, ratings, deadlines, subjects, notes, removedDates, updatedAt }
+// Response: { sessions, ratings, deadlines, subjects, notes, quote, removedDates, updatedAt }
 //   sessions  → { "YYYY-MM-DD": [ session, ... ] }   (changed days only when since)
 //   ratings   → { "YYYY-MM-DD": { value: 1-10, updatedAt } } — extracted from the
 //               same day values just read, so it costs zero extra KV reads. In
@@ -19,6 +19,7 @@
 //   deadlines → [ deadline, ... ]        (legacy done:boolean normalized)
 //   subjects  → [ subject, ... ]
 //   notes     → [ {id,title,snippet,createdAt,updatedAt}, ... ]   (newest first)
+//   quote     → { text, updatedAt } | null   (the single topbar line)
 //   removedDates → [ "YYYY-MM-DD", ... ] (deleted days changed since `since`)
 
 import {
@@ -26,6 +27,7 @@ import {
   DEADLINE_PREFIX,
   SUBJECT_PREFIX,
   NOTE_PREFIX,
+  QUOTE_PREFIX,
   SDEL_PREFIX,
   listAllKeys,
   normRating,
@@ -33,6 +35,7 @@ import {
   sanitizeSubject,
   sanitizeNote,
   dateFromSessionTombKey,
+  quoteKey,
   json,
 } from "./shared.js";
 import { noteMetaFromKey } from "./notes.js";
@@ -67,6 +70,10 @@ export async function getAll(env, cors, since) {
     else if (name.startsWith(DEADLINE_PREFIX)) deadlineNames.push(name);
     else if (name.startsWith(SUBJECT_PREFIX)) subjectNames.push(name);
     else if (name.startsWith(NOTE_PREFIX)) noteRows.push(noteMetaFromKey(k));
+    else if (name.startsWith(QUOTE_PREFIX)) {
+      // quote:current — the fixed key is always value-read below, never served
+      // from metadata; bucketing it here just keeps the scan accounting for it
+    }
     else if (name.startsWith(SDEL_PREFIX)) {
       // deleted-day tombstone: report it only when it postdates the watermark
       const updatedAt = Number(k.metadata?.updatedAt);
@@ -82,11 +89,14 @@ export async function getAll(env, cors, since) {
   // central stores, typically much faster than a cold read), not quota. Writes
   // revalidate instantly, so a written key is always fresh to other browsers;
   // only keys nobody wrote in 60s stay up to 60s stale.
-  // notes/deadlines/subjects stay uncached — each is a single read.
-  const [sessionVals, deadlineVals, subjectVals] = await Promise.all([
+  // notes/deadlines/subjects/quote stay uncached — each is a single read.
+  const [sessionVals, deadlineVals, subjectVals, quoteVal] = await Promise.all([
     Promise.all(sessionNames.map((n) => env.STUDY_KV.get(n, { type: "json", cacheTtl: 60 }))),
     Promise.all(deadlineNames.map((n) => env.STUDY_KV.get(n, { type: "json" }))),
     Promise.all(subjectNames.map((n) => env.STUDY_KV.get(n, { type: "json" }))),
+    // one fixed key — a single read, included on every pull (incremental too)
+    // so one request always carries the whole plan
+    env.STUDY_KV.get(quoteKey("current"), { type: "json" }),
   ]);
 
   const sessions = {};
@@ -141,10 +151,11 @@ export async function getAll(env, cors, since) {
     `getAll: ${sessionNames.length} days/${totalSessions} sessions, ` +
       `${Object.keys(ratings).length} ratings, ` +
       `${deadlines.length} deadlines, ${subjects.length} subjects, ${notes.length} notes` +
+      (quoteVal ? ", quote set" : "") +
       (incremental ? `, removed ${removedDates.length} days (since=${since})` : ` (full)`),
   );
   return json(
-    { sessions, ratings, deadlines, subjects, notes, removedDates, updatedAt: t0 },
+    { sessions, ratings, deadlines, subjects, notes, quote: quoteVal ?? null, removedDates, updatedAt: t0 },
     200,
     cors,
   );

@@ -24,7 +24,8 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
 import { useSubjectStore, seedSubjectsFromSessions } from '@/store/useSubjectStore';
 import { useNoteStore } from '@/store/useNoteStore';
-import type { Deadline, DateKey, Note, RatingEntry, RatingsByDate, Session, SessionsByDate, Subject, SyncState } from '@/types';
+import { useQuoteStore } from '@/store/useQuoteStore';
+import type { Deadline, DateKey, Note, Quote, RatingEntry, RatingsByDate, Session, SessionsByDate, Subject, SyncState } from '@/types';
 import { addDays, dateKey } from '@/lib/date';
 import { pinnedDates } from '@/lib/cachePins';
 import { CACHE_WINDOW_DAYS, useSessionStore } from '@/store/useSessionStore';
@@ -189,6 +190,9 @@ const dirtyDates = new Set<string>();
 const dirtyDeadlines = new Map<string, 'put' | 'delete'>();
 const dirtySubjects = new Map<string, 'put' | 'delete'>();
 const dirtyNotes = new Map<string, 'put' | 'delete'>();
+// the quote is one fixed slot (quote:current) — one id, one pending op
+const QUOTE_ID = 'current';
+const dirtyQuote = new Map<string, 'put' | 'delete'>();
 // KV throttles same-key writes to 1/sec: note id -> last attempt timestamp, so
 // a flush landing <1s after the previous write defers instead of failing loudly
 const NOTE_WRITE_MIN_GAP_MS = 1_000;
@@ -204,6 +208,7 @@ function saveQueue() {
       dirtyDeadlines.size === 0 &&
       dirtySubjects.size === 0 &&
       dirtyNotes.size === 0 &&
+      dirtyQuote.size === 0 &&
       tombstones.size === 0
     ) {
       localStorage.removeItem(QUEUE_KEY);
@@ -220,6 +225,7 @@ function saveQueue() {
         deadlines: [...dirtyDeadlines.entries()],
         subjects: [...dirtySubjects.entries()],
         notes: [...dirtyNotes.entries()],
+        quote: [...dirtyQuote.entries()],
         tombstones: tomb,
       }),
     );
@@ -237,6 +243,7 @@ function loadQueue() {
         deadlines?: unknown;
         subjects?: unknown;
         notes?: unknown;
+        quote?: unknown;
         tombstones?: unknown;
       };
       if (Array.isArray(parsed.dates)) {
@@ -272,6 +279,17 @@ function loadQueue() {
             (entry[1] === 'put' || entry[1] === 'delete')
           ) {
             dirtyNotes.set(entry[0], entry[1]);
+          }
+        }
+      }
+      if (Array.isArray(parsed.quote)) {
+        for (const entry of parsed.quote) {
+          if (
+            Array.isArray(entry) &&
+            typeof entry[0] === 'string' &&
+            (entry[1] === 'put' || entry[1] === 'delete')
+          ) {
+            dirtyQuote.set(entry[0], entry[1]);
           }
         }
       }
@@ -481,12 +499,15 @@ async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Pro
   const deadlines = useDeadlineStore.getState().deadlines;
   const subjects = useSubjectStore.getState().subjects;
   const notes = useNoteStore.getState().notes;
+  // a non-empty quote rides the adoption; an empty one is nothing to push
+  const quote = useQuoteStore.getState();
 
   const results = await Promise.allSettled([
     ...dates.map((date) => kvClient.putSession(cfg, date, st.sessions[date] ?? [], ratingOf(date))),
     ...deadlines.map((d) => kvClient.putDeadline(cfg, d)),
     ...subjects.map((s) => kvClient.putSubject(cfg, s)),
     ...notes.map((n) => kvClient.putNote(cfg, n)),
+    ...(quote.text ? [kvClient.putQuote(cfg, { text: quote.text, updatedAt: quote.updatedAt })] : []),
   ]);
 
   if (results.some((r) => r.status === 'rejected')) {
@@ -496,6 +517,7 @@ async function adoptLocalAsCloud(cfg: { token: string; workerUrl: string }): Pro
     for (const d of deadlines) dirtyDeadlines.set(d.id, 'put');
     for (const s of subjects) dirtySubjects.set(s.id, 'put');
     for (const n of notes) dirtyNotes.set(n.id, 'put');
+    if (quote.text) dirtyQuote.set(QUOTE_ID, 'put');
     saveQueue();
     scheduleSync();
     return false;
@@ -528,6 +550,7 @@ async function readCloud(): Promise<boolean> {
     let cloudDeadlines: Deadline[] | null;
     let cloudSubjects: Subject[] | null;
     let cloudNotes: Note[] | null;
+    let cloudQuote: Quote | null | undefined;
     let removedDates: string[] | null = null;
     const all = await kvClient.getAll(cfg, since);
     // a legacy worker returns no `removedDates` — treat its snapshot as full
@@ -540,6 +563,9 @@ async function readCloud(): Promise<boolean> {
       cloudDeadlines = all.deadlines;
       cloudSubjects = all.subjects;
       cloudNotes = all.notes;
+      // same for the quote — absent on a legacy worker, and the local copy
+      // (dirty or not) must be left alone then
+      if (all.quote !== undefined) cloudQuote = all.quote;
       if (incremental) removedDates = all.removedDates ?? null;
     } else {
       [rawSessions, cloudDeadlines, cloudSubjects, cloudNotes] = await Promise.all([
@@ -625,6 +651,9 @@ async function readCloud(): Promise<boolean> {
           useNoteStore.getState().notes,
           dirtyNotes,
         ));
+      }
+      if (cloudQuote !== undefined) {
+        useQuoteStore.getState().hydrate(cloudQuote);
       }
     } finally {
       hydrationDepth--;
@@ -723,7 +752,8 @@ export async function refreshFromCloud(opts?: { manual?: boolean }): Promise<voi
     dirtyDates.size ||
     dirtyDeadlines.size ||
     dirtySubjects.size ||
-    dirtyNotes.size
+    dirtyNotes.size ||
+    dirtyQuote.size
   ) {
     await flushDirty();
   }
@@ -950,7 +980,8 @@ function flushDirty(): Promise<void> {
     dirtyDates.size === 0 &&
     dirtyDeadlines.size === 0 &&
     dirtySubjects.size === 0 &&
-    dirtyNotes.size === 0
+    dirtyNotes.size === 0 &&
+    dirtyQuote.size === 0
   ) {
     return Promise.resolve();
   }
@@ -966,6 +997,7 @@ function flushDirty(): Promise<void> {
     const dls = [...dirtyDeadlines.entries()];
     const subs = [...dirtySubjects.entries()];
     const nts = [...dirtyNotes.entries()];
+    const qts = [...dirtyQuote.entries()];
     let failed = false;
     let authBlocked = false;
     let retryIn = 4_000;
@@ -1115,6 +1147,33 @@ function flushDirty(): Promise<void> {
       }
     }
 
+    for (const [id, op] of qts) {
+      try {
+        // LWW merge: local wins when local.updatedAt >= remote.updatedAt (the
+        // worker keeps the newer copy and reports a stale write back). An empty
+        // text is a real value with a stamp — set and clear both ride this PUT.
+        const q = useQuoteStore.getState();
+        const res = await kvClient.putQuote(cfg, { text: q.text, updatedAt: q.updatedAt });
+        if (res?.stale && res.item) {
+          console.info('quote: server copy is newer, adopted it');
+          hydrationDepth++;
+          try {
+            useQuoteStore.getState().hydrate(res.item);
+          } finally {
+            hydrationDepth--;
+          }
+        }
+        dirtyQuote.delete(id);
+        saveQueue();
+      } catch (err) {
+        console.warn(op + ' quote failed:', err);
+        if (!lastError) lastError = describeError(err);
+        if (!isRetryable(err)) authBlocked = true;
+        retryIn = Math.max(retryIn, retryDelayFor(err));
+        failed = true;
+      }
+    }
+
     if (failed) {
       // an auth or permission failure needs the user, not another attempt; the
       // queue stays on disk until they fix it or reload
@@ -1128,7 +1187,7 @@ function flushDirty(): Promise<void> {
       lastSyncAt = Date.now();
       refreshPill();
       // items that were marked dirty while this flush was in flight
-      if (dirtyDates.size || dirtyDeadlines.size || dirtySubjects.size || dirtyNotes.size) {
+      if (dirtyDates.size || dirtyDeadlines.size || dirtySubjects.size || dirtyNotes.size || dirtyQuote.size) {
         scheduleSync();
       }
     }
@@ -1164,7 +1223,8 @@ export function waitForSaved(): Promise<'saved' | 'error'> {
         dirtyDates.size === 0 &&
         dirtyDeadlines.size === 0 &&
         dirtySubjects.size === 0 &&
-        dirtyNotes.size === 0
+        dirtyNotes.size === 0 &&
+        dirtyQuote.size === 0
       ) {
         settle('saved');
       }
@@ -1180,6 +1240,7 @@ let prevRatingsRef: RatingsByDate = {};
 let prevDeadlinesRef: Deadline[] = [];
 let prevSubjectsRef: Subject[] = [];
 let prevNotesRef: Note[] = [];
+let prevQuoteRef = { text: '', updatedAt: 0 };
 
 function diffSessions(curr: Record<string, Session[]>) {
   const prev = prevSessionsRef;
@@ -1268,6 +1329,16 @@ function diffNotes(curr: Note[]) {
   saveQueue();
 }
 
+// The quote is one fixed slot. An empty text is a real value with a stamp —
+// that's how it is cleared — so set and clear both queue the same single put.
+function diffQuote(curr: { text: string; updatedAt: number }) {
+  const prev = prevQuoteRef;
+  if (curr.text === prev.text && curr.updatedAt === prev.updatedAt) return;
+  dirtyQuote.set(QUOTE_ID, curr.text ? 'put' : 'delete');
+  prevQuoteRef = curr;
+  saveQueue();
+}
+
 // ─────── main hook ───────
 export function useCloudSync() {
   const token = useSettingsStore((s) => s.token);
@@ -1289,6 +1360,10 @@ export function useCloudSync() {
     prevDeadlinesRef = useDeadlineStore.getState().deadlines;
     prevSubjectsRef = useSubjectStore.getState().subjects;
     prevNotesRef = useNoteStore.getState().notes;
+    prevQuoteRef = {
+      text: useQuoteStore.getState().text,
+      updatedAt: useQuoteStore.getState().updatedAt,
+    };
 
     // boot: flush anything pending from a previous session, then make the
     // database authoritative for what the user sees
@@ -1333,6 +1408,14 @@ export function useCloudSync() {
       diffNotes(state.notes);
       if (dirtyNotes.size) scheduleSync();
     });
+    const unsubQuote = useQuoteStore.subscribe((state) => {
+      if (isHydrating()) {
+        prevQuoteRef = { text: state.text, updatedAt: state.updatedAt };
+        return;
+      }
+      diffQuote({ text: state.text, updatedAt: state.updatedAt });
+      if (dirtyQuote.size) scheduleSync();
+    });
 
     // Coming back to the tab: push pending edits, then re-pull so data created
     // elsewhere (another device, or the ingest API) shows up. No loading gate
@@ -1348,7 +1431,8 @@ export function useCloudSync() {
         dirtyDates.size ||
         dirtyDeadlines.size ||
         dirtySubjects.size ||
-        dirtyNotes.size
+        dirtyNotes.size ||
+        dirtyQuote.size
       ) {
         void flushDirty();
       }
@@ -1381,6 +1465,7 @@ export function useCloudSync() {
       unsubDeadlines();
       unsubSubjects();
       unsubNotes();
+      unsubQuote();
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', debouncedSync);
       clearInterval(pillTick);

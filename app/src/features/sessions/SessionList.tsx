@@ -4,7 +4,7 @@ import { useDeadlineStore } from '@/store/useDeadlineStore';
 import { SessionCard } from './SessionCard';
 import { EmptyState } from './EmptyState';
 import { DeadlineBanner } from './DeadlineBanner';
-import { STATUS_RANK } from '@/lib/status';
+import { deadlinesForDay } from '@/lib/deadlines';
 import type { Session } from '@/types';
 
 export function SessionList({
@@ -16,9 +16,7 @@ export function SessionList({
 }) {
   const sessions = useSessionStore((s) => s.sessions[date]) ?? [];
   const deadlines = useDeadlineStore((s) => s.deadlines);
-  const todaysDeadlines = deadlines
-    .filter((d) => d.dueDate === date)
-    .sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status]);
+  const todaysDeadlines = deadlinesForDay(deadlines, date);
 
   if (sessions.length === 0 && todaysDeadlines.length === 0) {
     return (
@@ -38,8 +36,8 @@ export function SessionList({
         visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
       }}
     >
-      {todaysDeadlines.map((d) => (
-        <DeadlineBanner key={d.id} deadline={d} />
+      {todaysDeadlines.map(({ deadline, context }) => (
+        <DeadlineBanner key={deadline.id} deadline={deadline} context={context} />
       ))}
       <AnimatePresence mode="popLayout">
         {sessions.map((s) => (

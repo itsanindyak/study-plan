@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export function Clock() {
+export function Clock({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -16,6 +16,19 @@ export function Clock() {
     month: 'short',
     day: 'numeric',
   });
+
+  if (compact) {
+    return (
+      <div className="topbar-clock" title={`${dateStr} ${h}:${m}:${s}`}>
+        <span className="topbar-clock-icon" aria-hidden="true">⏰</span>
+        <span className="topbar-clock-time">
+          {h}:{m}
+          <span className="topbar-clock-sec">:{s}</span>
+        </span>
+        <span className="topbar-clock-date">{dateStr}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="bento-card clock-card">

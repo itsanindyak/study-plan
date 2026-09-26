@@ -9,6 +9,12 @@ function fmtDateShort(ts: number): string {
   return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`;
 }
 
+function fmtDateKeyShort(key: string): string {
+  const d = new Date(key + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return key;
+  return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
+
 function dueLabel(d: Deadline): { text: string; urgent: boolean } {
   if (d.status === 'done') {
     const at = d.completedAt ?? Date.now();
@@ -27,9 +33,17 @@ function dueLabel(d: Deadline): { text: string; urgent: boolean } {
   return { text: `due in ${days} days`, urgent: false };
 }
 
-export function DeadlineBanner({ deadline }: { deadline: Deadline }) {
+export function DeadlineBanner({
+  deadline,
+  context = 'due',
+}: {
+  deadline: Deadline;
+  context?: 'due' | 'completion';
+}) {
   const setStatus = useDeadlineStore((s) => s.setStatus);
   const { text, urgent } = dueLabel(deadline);
+  // on the completion day, remind where it was originally due
+  const showWasDue = context === 'completion' && deadline.dueDate;
 
   const className =
     'dl-banner' +
@@ -45,7 +59,12 @@ export function DeadlineBanner({ deadline }: { deadline: Deadline }) {
       </span>
       <div className="dl-banner-body">
         <div className="dl-banner-title">{deadline.title}</div>
-        <div className="dl-banner-due">{text}</div>
+        <div className="dl-banner-due">
+          {text}
+          {showWasDue && (
+            <span className="dl-banner-was-due"> · was due {fmtDateKeyShort(deadline.dueDate)}</span>
+          )}
+        </div>
       </div>
       <button
         type="button"

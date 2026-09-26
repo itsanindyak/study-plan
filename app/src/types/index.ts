@@ -56,6 +56,11 @@ export interface Note {
   updatedAt: number; // ms epoch — bumped on every save
 }
 
+export interface Quote {
+  text: string;
+  updatedAt: number; // ms epoch — bumped on every edit; drives last-write-wins
+}
+
 export type SyncState = 'offline' | 'syncing' | 'synced' | 'error';
 
 export interface CloudConfig {
