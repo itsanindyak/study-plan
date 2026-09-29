@@ -3,6 +3,11 @@ export type DateKey = string; // 'YYYY-MM-DD'
 // tri-state task status: 'pending' is the initial state of a new task
 export type TaskStatus = 'pending' | 'done' | 'notdone';
 
+// 'study' sessions carry a subject/topic; 'break' blocks are non-study time
+// (lunch, tea, a walk) that occupy the timeline but never count toward study
+// totals or Focus Mode. Absent kind means 'study' (older records).
+export type SessionKind = 'study' | 'break';
+
 export interface Session {
   id: string;
   subject: string;
@@ -11,6 +16,7 @@ export interface Session {
   duration: number; // minutes
   color: string; // hex
   status: TaskStatus;
+  kind?: SessionKind; // absent = 'study'
   updatedAt: number; // ms epoch
   focusedSeconds?: number; // actual focus time, set when focus session ends (excludes breaks)
 }

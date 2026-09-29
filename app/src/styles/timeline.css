@@ -173,3 +173,16 @@
 .tl-block.compact .tlb-time {
   display: none;
 }
+
+/* ─────── break blocks ─────── */
+.tl-block.break {
+  background: var(--break) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+}
+.tl-block.break:hover {
+  box-shadow: 0 8px 18px -4px rgba(0, 0, 0, 0.25);
+}
+.tl-block.break .tlb-title {
+  font-weight: 700;
+}

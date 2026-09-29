@@ -37,6 +37,10 @@
   --inverse-tint: rgba(255, 255, 255, 0.15);
   --inverse-tint-2: rgba(255, 255, 255, 0.1);
   --inverse-hover: #2a2622;
+  /* break blocks: a neutral, deliberately un-study look */
+  --break: #6b7280;
+  --break-soft: #f2f3f5;
+  --break-border: #c8ccd3;
 }
 
 /* ─────── dark theme tokens ─────── */
@@ -72,6 +76,10 @@
   --inverse-tint: rgba(24, 23, 21, 0.12);
   --inverse-tint-2: rgba(24, 23, 21, 0.08);
   --inverse-hover: #ffffff;
+  /* break blocks: a neutral, deliberately un-study look */
+  --break: #6b7280;
+  --break-soft: #23262b;
+  --break-border: #3c414a;
 }
 
 /* ─────── reset + typography ─────── */

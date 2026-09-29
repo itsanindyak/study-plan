@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { fmtTime12, minToTime, timeToMin, fmtDuration } from '@/lib/time';
 import { statusGradient } from '@/lib/color';
+import { isBreak, breakTitle, BREAK_COLOR } from '@/lib/session';
 import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import { SubjectPicker } from '@/features/sessions/SubjectPicker';
 import { nextStatus, STATUS_LABEL } from '@/lib/status';
@@ -21,7 +22,10 @@ export function SessionPopup({
   const remove = useSessionStore((s) => s.remove);
   const update = useSessionStore((s) => s.update);
   const colorMap = useSubjectColorMap();
-  const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
+  const breakRow = isBreak(session);
+  const color = breakRow
+    ? BREAK_COLOR
+    : colorMap.get(normalizeName(session.subject)) ?? session.color;
 
   const [isEditing, setIsEditing] = useState(false);
   const [subject, setSubject] = useState(session.subject);
@@ -83,7 +87,8 @@ export function SessionPopup({
   const onSave = () => {
     const s = subject.trim();
     const t = topic.trim();
-    if (!s || !t) return;
+    // breaks only need a label; study sessions need both subject and topic
+    if (breakRow ? !t : !s || !t) return;
 
     // Convert AM/PM format to 24h "HH:MM"
     let hourNum = parseInt(startHour, 10);
@@ -102,6 +107,7 @@ export function SessionPopup({
       topic: t,
       time: time24,
       duration: totalDuration,
+      kind: breakRow ? 'break' : 'study',
     });
     onClose();
   };
@@ -133,25 +139,41 @@ export function SessionPopup({
           />
           {!isEditing ? (
             <div className="popup-title">
-              <h3>{session.topic || session.subject}</h3>
-              <div className="pt-sub">{session.subject}</div>
+              <h3>{breakRow ? breakTitle(session) : session.topic || session.subject}</h3>
+              <div className="pt-sub">{breakRow ? 'break' : session.subject}</div>
             </div>
           ) : (
             <div className="popup-title" style={{ marginRight: '0.5rem' }}>
-              <div className="popup-edit-field">
-                <label>subject</label>
-                <SubjectPicker value={subject} onChange={setSubject} />
-              </div>
-              <div className="popup-edit-field" style={{ marginBottom: 0 }}>
-                <label>topic</label>
-                <input
-                  type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  className="popup-input"
-                  required
-                />
-              </div>
+              {breakRow ? (
+                <div className="popup-edit-field" style={{ marginBottom: 0 }}>
+                  <label>break label</label>
+                  <input
+                    type="text"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    className="popup-input"
+                    placeholder="e.g. lunch, tea, walk"
+                    required
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="popup-edit-field">
+                    <label>subject</label>
+                    <SubjectPicker value={subject} onChange={setSubject} />
+                  </div>
+                  <div className="popup-edit-field" style={{ marginBottom: 0 }}>
+                    <label>topic</label>
+                    <input
+                      type="text"
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      className="popup-input"
+                      required
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
           <button className="popup-close" onClick={onClose} aria-label="close">✕</button>
@@ -171,35 +193,48 @@ export function SessionPopup({
               <span className="pr-label">duration</span>
               <span className="pr-value">{fmtDuration(dur)} ({dur} min)</span>
             </div>
-            <div className="popup-row">
-              <span className="pr-label">status</span>
-              <span className="pr-value">{STATUS_LABEL[session.status]}</span>
-            </div>
-            <div className="popup-hex">
-              <div className="ph-dot" style={{ background: color }} />
-              <span>{color.toUpperCase()}</span>
-            </div>
+            {breakRow ? (
+              <div className="popup-row">
+                <span className="pr-label">type</span>
+                <span className="pr-value">break</span>
+              </div>
+            ) : (
+              <>
+                <div className="popup-row">
+                  <span className="pr-label">status</span>
+                  <span className="pr-value">{STATUS_LABEL[session.status]}</span>
+                </div>
+                <div className="popup-hex">
+                  <div className="ph-dot" style={{ background: color }} />
+                  <span>{color.toUpperCase()}</span>
+                </div>
+              </>
+            )}
             <div className="popup-actions">
-              <button
-                className={'pa-done' + (session.status === 'done' ? ' active' : '')}
-                onClick={onMark('done')}
-                aria-pressed={session.status === 'done'}
-                title={session.status === 'done' ? 'Click to clear back to pending' : 'Mark as done'}
-              >
-                ✓ done
-              </button>
-              <button
-                className={'pa-notdone' + (session.status === 'notdone' ? ' active' : '')}
-                onClick={onMark('notdone')}
-                aria-pressed={session.status === 'notdone'}
-                title={
-                  session.status === 'notdone'
-                    ? 'Click to clear back to pending'
-                    : 'Mark as not done'
-                }
-              >
-                ✕ not done
-              </button>
+              {!breakRow && (
+                <>
+                  <button
+                    className={'pa-done' + (session.status === 'done' ? ' active' : '')}
+                    onClick={onMark('done')}
+                    aria-pressed={session.status === 'done'}
+                    title={session.status === 'done' ? 'Click to clear back to pending' : 'Mark as done'}
+                  >
+                    ✓ done
+                  </button>
+                  <button
+                    className={'pa-notdone' + (session.status === 'notdone' ? ' active' : '')}
+                    onClick={onMark('notdone')}
+                    aria-pressed={session.status === 'notdone'}
+                    title={
+                      session.status === 'notdone'
+                        ? 'Click to clear back to pending'
+                        : 'Mark as not done'
+                    }
+                  >
+                    ✕ not done
+                  </button>
+                </>
+              )}
               <button className="pa-edit" onClick={() => setIsEditing(true)}>edit</button>
               <button className="pa-del" onClick={onDelete}>delete</button>
             </div>

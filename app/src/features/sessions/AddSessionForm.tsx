@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { SubjectPicker } from './SubjectPicker';
 import { timeToMin } from '@/lib/time';
+import type { SessionKind } from '@/types';
 
 export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
   const add = useSessionStore((s) => s.add);
@@ -11,6 +12,7 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
     [allSessions, selectedDate],
   );
 
+  const [kind, setKind] = useState<SessionKind>('study');
   const [subject, setSubject] = useState('');
   const [topic, setTopic] = useState('');
 
@@ -46,9 +48,11 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    const isBreak = kind === 'break';
     const s = subject.trim();
     const t = topic.trim();
-    if (!s || !t) return;
+    // breaks only need a label; study sessions need both subject and topic
+    if (isBreak ? !t : !s || !t) return;
 
     // Convert AM/PM format to 24h "HH:MM"
     let hourNum = parseInt(startHour, 10);
@@ -62,7 +66,7 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
     // Calculate total duration in minutes (ensure min 5 mins)
     const totalDuration = Math.max(5, durHours * 60 + durMins);
 
-    add(selectedDate, { subject: s, topic: t, time: time24, duration: totalDuration });
+    add(selectedDate, { subject: s, topic: t, time: time24, duration: totalDuration, kind });
 
     setSubject('');
     setTopic('');
@@ -71,23 +75,60 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
     setDurMins(0);
   };
 
+  const isBreak = kind === 'break';
+
   return (
     <form className="add-form" onSubmit={submit}>
+      <div className="kind-toggle" role="radiogroup" aria-label="session type">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!isBreak}
+          className={'kind-toggle-btn' + (!isBreak ? ' active' : '')}
+          onClick={() => setKind('study')}
+        >
+          study
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={isBreak}
+          className={'kind-toggle-btn' + (isBreak ? ' active break' : '')}
+          onClick={() => setKind('break')}
+        >
+          break
+        </button>
+      </div>
       <div className="add-form-row">
-        <div className="field field-subject">
-          <label>subject</label>
-          <SubjectPicker value={subject} onChange={setSubject} />
-        </div>
-        <div className="field field-topic">
-          <label>topic</label>
-          <input
-            type="text"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="e.g. integration by parts"
-            required
-          />
-        </div>
+        {isBreak ? (
+          <div className="field field-subject">
+            <label>break label</label>
+            <input
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. lunch, tea, walk"
+              required
+            />
+          </div>
+        ) : (
+          <>
+            <div className="field field-subject">
+              <label>subject</label>
+              <SubjectPicker value={subject} onChange={setSubject} />
+            </div>
+            <div className="field field-topic">
+              <label>topic</label>
+              <input
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="e.g. integration by parts"
+                required
+              />
+            </div>
+          </>
+        )}
       </div>
       <div className="add-form-row">
         <div className="field field-time">
@@ -150,7 +191,9 @@ export function AddSessionForm({ selectedDate }: { selectedDate: string }) {
           </div>
         </div>
         <div className="submit-cell">
-          <button type="submit" className="submit-btn">+ add session</button>
+          <button type="submit" className={'submit-btn' + (isBreak ? ' break' : '')}>
+            {isBreak ? '+ add break' : '+ add session'}
+          </button>
         </div>
       </div>
     </form>

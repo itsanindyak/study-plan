@@ -41,8 +41,11 @@ export function normalizeSession(
   raw: (Partial<Session> & LegacyStatus) | null | undefined,
 ): Session | null {
   if (!raw || typeof raw !== 'object') return null;
-  const { done: _legacyDone, ...rest } = raw;
-  return { ...(rest as Session), status: normalizeStatus(raw) };
+  const { done: _legacyDone, kind, ...rest } = raw;
+  const session = { ...(rest as Session), status: normalizeStatus(raw) };
+  // only an explicit 'break' is carried; anything else stays a study session
+  if (kind === 'break') session.kind = 'break';
+  return session;
 }
 
 export function normalizeDeadline(

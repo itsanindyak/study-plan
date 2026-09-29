@@ -703,3 +703,89 @@
   border-color: var(--red);
 }
 
+/* ─────── study / break toggle (add form) ─────── */
+.kind-toggle {
+  display: flex;
+  align-self: flex-start;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.kind-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.95rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.kind-toggle-btn:hover {
+  color: var(--text);
+}
+.kind-toggle-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.kind-toggle-btn.active.break {
+  background: var(--break-soft);
+  color: var(--break);
+}
+/* dark: the surface pill barely differs from the track, so light up the
+   active choice with the theme accent instead */
+[data-theme='dark'] .kind-toggle {
+  background: var(--surface);
+}
+[data-theme='dark'] .kind-toggle-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+[data-theme='dark'] .kind-toggle-btn.active.break {
+  background: var(--break-soft);
+  color: var(--break);
+  box-shadow: inset 0 0 0 1px var(--break);
+}
+.submit-btn.break {
+  background: var(--break);
+  color: #fff;
+}
+.submit-btn.break:hover {
+  background: color-mix(in srgb, var(--break) 82%, #000);
+  color: #fff;
+}
+
+/* ─────── break session row ─────── */
+.session.break {
+  background: var(--break-soft);
+  border-style: dashed;
+  border-color: var(--break-border);
+}
+.session.break:hover {
+  border-color: var(--break);
+}
+.session.break .s-color {
+  background: var(--break) !important;
+}
+.s-break-tag {
+  display: inline-block;
+  margin-right: 0.45rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--break);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: 1px;
+}
+

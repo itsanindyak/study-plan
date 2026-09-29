@@ -187,6 +187,9 @@ export function sanitizeSession(s) {
     updatedAt: Number.isFinite(+s.updatedAt) ? +s.updatedAt : Date.now(),
   };
   if (Number.isFinite(+s.focusedSeconds)) out.focusedSeconds = +s.focusedSeconds;
+  // break blocks are non-study time; only the explicit value is persisted so
+  // study rows stay byte-identical to before this field existed
+  if (s.kind === "break") out.kind = "break";
   return out;
 }
 

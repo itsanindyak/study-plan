@@ -20,6 +20,7 @@ import { useSessionStore } from '@/store/useSessionStore';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
 import { useSettingsStore, selectIsConfigured } from '@/store/useSettingsStore';
 import { DAYS, MONTHS, addDays, dateKey, getWeekStart, todayMondayIndex } from '@/lib/date';
+import { isBreak } from '@/lib/session';
 import type { Session } from '@/types';
 
 export function App() {
@@ -59,10 +60,14 @@ export function App() {
   const daySessions = useSessionStore((s) => s.sessions[selectedKey]) ?? [];
   const dayRating = useSessionStore((s) => s.ratings[selectedKey]?.value ?? null);
 
+  // study sessions only — breaks occupy time but never count toward the
+  // hours/done totals shown in the header and timeline
+  const dayStudySessions = useMemo(() => daySessions.filter((s) => !isBreak(s)), [daySessions]);
+
   const { totalMin, completedMin } = useMemo(() => {
     let tMin = 0;
     let cMin = 0;
-    for (const s of daySessions) {
+    for (const s of dayStudySessions) {
       const d = parseInt(String(s.duration)) || 0;
       tMin += d;
       if (s.status === 'done') {
@@ -70,7 +75,7 @@ export function App() {
       }
     }
     return { totalMin: tMin, completedMin: cMin };
-  }, [daySessions]);
+  }, [dayStudySessions]);
 
   const goPrevWeek = () => {
     setWeekOffset((w) => w - 1);
@@ -202,8 +207,8 @@ export function App() {
             <div className="timeline-head">
               <span className="th-label">timeline</span>
               <span className="th-count" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <strong>{daySessions.filter((s) => s.status === 'done').length}</strong>/
-                <span>{daySessions.length}</span> done
+                <strong>{dayStudySessions.filter((s) => s.status === 'done').length}</strong>/
+                <span>{dayStudySessions.length}</span> done
                 <span style={{ opacity: 0.35, margin: '0 4px' }}>·</span>
                 <strong>{(completedMin / 60).toFixed(1)}</strong>/
                 <span>{(totalMin / 60).toFixed(1)}</span> hrs

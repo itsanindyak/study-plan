@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { timeToMin, minToTime, fmtTime12 } from '@/lib/time';
 import { statusGradient } from '@/lib/color';
+import { isBreak, breakTitle } from '@/lib/session';
 import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import type { Session } from '@/types';
 
@@ -29,6 +30,8 @@ export function TimelineBlock({
   // instantly; fall back to whatever color the session was stamped with
   const colorMap = useSubjectColorMap();
   const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
+  const breakRow = isBreak(session);
+  const label = breakRow ? breakTitle(session) : session.topic || session.subject;
 
   const style: CSSProperties = {
     top: `${top}px`,
@@ -50,16 +53,17 @@ export function TimelineBlock({
     <div
       className={
         'tl-block' +
+        (breakRow ? ' break' : '') +
         (session.status === 'done' ? ' done' : '') +
         (session.status === 'notdone' ? ' notdone' : '') +
         (compact ? ' compact' : '')
       }
       style={style}
       onClick={onOpen}
-      title={`${session.subject} — ${session.topic}\n${fmtTime12(session.time)} – ${fmtTime12(minToTime(endM))}`}
+      title={`${breakRow ? 'break' : session.subject} — ${label}\n${fmtTime12(session.time)} – ${fmtTime12(minToTime(endM))}`}
     >
-      <div className="tlb-subject">{session.subject}</div>
-      <div className="tlb-title">{session.topic || session.subject}</div>
+      {!breakRow && <div className="tlb-subject">{session.subject}</div>}
+      <div className="tlb-title">{label}</div>
       <div className="tlb-time">
         {fmtTime12(session.time)} – {fmtTime12(minToTime(endM))}
       </div>

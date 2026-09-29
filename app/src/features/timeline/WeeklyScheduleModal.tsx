@@ -6,6 +6,7 @@ import { assignLanes } from '@/lib/lanes';
 import { timeToMin, minToTime, fmtTime12 } from '@/lib/time';
 import { statusGradient } from '@/lib/color';
 import { STATUS_RANK } from '@/lib/status';
+import { isBreak, breakTitle, BREAK_COLOR } from '@/lib/session';
 import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import { DeadlineBanner } from '@/features/sessions/DeadlineBanner';
 import { dateKeyFromTs, type DayDeadline } from '@/lib/deadlines';
@@ -208,7 +209,11 @@ export function WeeklyScheduleModal({
                     const dur = parseInt(String(session.duration)) || 60;
                     const top = ((startM - TL_START * 60) / 60) * HOUR_H;
                     const height = Math.max(26, (dur / 60) * HOUR_H - 3);
-                    const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
+                    const breakRow = isBreak(session);
+                    const color = breakRow
+                      ? BREAK_COLOR
+                      : colorMap.get(normalizeName(session.subject)) ?? session.color;
+                    const label = breakRow ? breakTitle(session) : session.topic || session.subject;
 
                     const blockStyle: CSSProperties = {
                       top: `${top}px`,
@@ -229,15 +234,15 @@ export function WeeklyScheduleModal({
                     return (
                       <div
                         key={session.id}
-                        className={`weekly-block ${session.status === 'done' ? 'done' : ''}${
-                          session.status === 'notdone' ? ' notdone' : ''
-                        }`}
+                        className={`weekly-block${breakRow ? ' break' : ''}${
+                          session.status === 'done' ? ' done' : ''
+                        }${session.status === 'notdone' ? ' notdone' : ''}`}
                         style={blockStyle}
                         onClick={() => onOpenSession(key, session)}
-                        title={`${session.subject} — ${session.topic}\n${fmtTime12(session.time)} – ${fmtTime12(minToTime(startM + dur))}`}
+                        title={`${breakRow ? 'break' : session.subject} — ${label}\n${fmtTime12(session.time)} – ${fmtTime12(minToTime(startM + dur))}`}
                       >
-                        <div className="weekly-block-subject">{session.subject}</div>
-                        <div className="weekly-block-topic">{session.topic || session.subject}</div>
+                        {!breakRow && <div className="weekly-block-subject">{session.subject}</div>}
+                        <div className="weekly-block-topic">{label}</div>
                         <div className="weekly-block-time">
                           {fmtTime12(session.time)}
                         </div>

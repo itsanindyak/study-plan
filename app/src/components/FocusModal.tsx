@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
 import { todayKey } from '@/lib/date';
+import { isBreak } from '@/lib/session';
 import { HeaderLeft } from './HeaderLeft';
 import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import type { Session } from '@/types';
@@ -100,6 +101,8 @@ export function FocusModal({ onClose }: { onClose: () => void }) {
       const nowMin = now.getHours() * 60 + now.getMinutes();
       const match = todaySessions.find((s) => {
         if (s.status === 'done') return false;
+        // breaks hold time on the plan but are never a focus target
+        if (isBreak(s)) return false;
         const [h, m] = s.time.split(':').map(Number);
         const start = h * 60 + m;
         const end = start + (parseInt(String(s.duration)) || 0);

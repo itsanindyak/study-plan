@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useSessionStore } from '@/store/useSessionStore';
+import { isBreak } from '@/lib/session';
 import type { DateKey } from '@/types';
 import { QuoteCard } from './QuoteCard';
 
@@ -17,6 +18,7 @@ export function BentoStats({ weekStart, selectedKey }: { weekStart: Date; select
       const key: DateKey = dateKey(d);
       const list = sessions[key] ?? [];
       for (const s of list) {
+        if (isBreak(s)) continue;
         const m = parseInt(String(s.duration)) || 0;
         totalMin += m;
         totalCount++;
@@ -39,6 +41,7 @@ export function BentoStats({ weekStart, selectedKey }: { weekStart: Date; select
     let totalCount = 0;
     let doneCount = 0;
     for (const s of daySessions) {
+      if (isBreak(s)) continue;
       const m = parseInt(String(s.duration)) || 0;
       totalMin += m;
       totalCount++;

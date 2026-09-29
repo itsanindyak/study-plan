@@ -1275,3 +1275,12 @@
 [data-theme='dark'] .settings-status.ok {
   color: var(--green-dark);
 }
+
+/* ------- break blocks in the weekly grid ------- */
+.weekly-block.break {
+  background: var(--break) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+}
+.weekly-block.break .weekly-block-topic {
+  font-weight: 700;
+}

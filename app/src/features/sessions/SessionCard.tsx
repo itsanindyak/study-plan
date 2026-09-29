@@ -3,6 +3,7 @@ import { useSessionStore } from '@/store/useSessionStore';
 import { fmtTime12, minToTime, timeToMin } from '@/lib/time';
 import { nextStatus } from '@/lib/status';
 import { statusColor } from '@/lib/color';
+import { isBreak, breakTitle } from '@/lib/session';
 import { useSubjectColorMap, normalize as normalizeName } from '@/lib/subjects';
 import type { Session } from '@/types';
 
@@ -22,9 +23,11 @@ export function SessionCard({
   const endM = startM + dur;
   const colorMap = useSubjectColorMap();
   const color = colorMap.get(normalizeName(session.subject)) ?? session.color;
+  const breakRow = isBreak(session);
 
   const className =
     'session' +
+    (breakRow ? ' break' : '') +
     (session.status === 'done' ? ' done' : '') +
     (session.status === 'notdone' ? ' notdone' : '');
 
@@ -40,27 +43,38 @@ export function SessionCard({
       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
     >
       <div className="s-color" style={{ background: statusColor(color, session.status) }} />
-      <motion.button
-        type="button"
-        className={'s-check' + (session.status === 'done' ? ' checked' : '')}
-        onClick={() => setStatus(date, session.id, nextStatus(session.status, 'done'))}
-        aria-label="mark as done"
-        aria-pressed={session.status === 'done'}
-        whileTap={{ scale: 0.85 }}
-      />
-      <motion.button
-        type="button"
-        className={'s-notdone' + (session.status === 'notdone' ? ' active' : '')}
-        onClick={() => setStatus(date, session.id, nextStatus(session.status, 'notdone'))}
-        aria-label="mark as not done"
-        aria-pressed={session.status === 'notdone'}
-        whileTap={{ scale: 0.85 }}
-      />
+      {!breakRow && (
+        <>
+          <motion.button
+            type="button"
+            className={'s-check' + (session.status === 'done' ? ' checked' : '')}
+            onClick={() => setStatus(date, session.id, nextStatus(session.status, 'done'))}
+            aria-label="mark as done"
+            aria-pressed={session.status === 'done'}
+            whileTap={{ scale: 0.85 }}
+          />
+          <motion.button
+            type="button"
+            className={'s-notdone' + (session.status === 'notdone' ? ' active' : '')}
+            onClick={() => setStatus(date, session.id, nextStatus(session.status, 'notdone'))}
+            aria-label="mark as not done"
+            aria-pressed={session.status === 'notdone'}
+            whileTap={{ scale: 0.85 }}
+          />
+        </>
+      )}
       <div className="s-body" onClick={onOpen} role="button" tabIndex={0}>
-        <div className="s-title">
-          {session.subject}
-          <span className="s-topic">— {session.topic}</span>
-        </div>
+        {breakRow ? (
+          <div className="s-title">
+            <span className="s-break-tag">break</span>{' '}
+            {breakTitle(session)}
+          </div>
+        ) : (
+          <div className="s-title">
+            {session.subject}
+            <span className="s-topic">— {session.topic}</span>
+          </div>
+        )}
         <div className="s-meta">
           <span>⏖ {fmtTime12(session.time)} – {fmtTime12(minToTime(endM))}</span>
           <span>■ {dur} min</span>

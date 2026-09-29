@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { DateKey, RatingEntry, RatingsByDate, Session, SessionsByDate, TaskStatus } from '@/types';
+import type { DateKey, RatingEntry, RatingsByDate, Session, SessionKind, SessionsByDate, TaskStatus } from '@/types';
 import { newId } from '@/lib/id';
 import { addDays, dateKey } from '@/lib/date';
 import { pinnedDates } from '@/lib/cachePins';
 import { normalizeSession } from '@/lib/status';
 import { suggestColor } from '@/lib/subjects';
+import { BREAK_COLOR } from '@/lib/session';
 import { useSubjectStore } from '@/store/useSubjectStore';
 
 interface SessionState {
@@ -20,7 +21,7 @@ interface SessionState {
   // actions
   add: (
     date: DateKey,
-    input: { subject: string; topic: string; time: string; duration: number; color?: string },
+    input: { subject: string; topic: string; time: string; duration: number; color?: string; kind?: SessionKind },
   ) => Session;
   setStatus: (
     date: DateKey,
@@ -32,7 +33,7 @@ interface SessionState {
   update: (
     date: DateKey,
     id: string,
-    input: { subject: string; topic: string; time: string; duration: number; color?: string },
+    input: { subject: string; topic: string; time: string; duration: number; color?: string; kind?: SessionKind },
   ) => void;
   replaceForDate: (date: DateKey, list: Session[]) => void;
 
@@ -105,12 +106,15 @@ export const useSessionStore = create<SessionState>()(
         // Caller passes the catalog color it already knows; otherwise we
         // pull one from the palette. Sessions always store a concrete color
         // so a session can still render even if the catalog is empty
-        // (bootstrapping) or the subject was later deleted.
+        // (bootstrapping) or the subject was later deleted. Breaks skip the
+        // palette entirely — they use one neutral fill.
+        const kind: SessionKind = input.kind === 'break' ? 'break' : 'study';
         const color =
-          input.color ?? suggestColor(useSubjectStore.getState().subjects);
+          input.color ??
+          (kind === 'break' ? BREAK_COLOR : suggestColor(useSubjectStore.getState().subjects));
         const session: Session = {
           id: newId(),
-          subject: input.subject,
+          subject: kind === 'break' ? '' : input.subject,
           topic: input.topic,
           time: input.time,
           duration: input.duration,
@@ -118,6 +122,7 @@ export const useSessionStore = create<SessionState>()(
           status: 'pending',
           updatedAt: Date.now(),
         };
+        if (kind === 'break') session.kind = 'break';
         set((s) => ({
           sessions: {
             ...s.sessions,
@@ -159,26 +164,34 @@ export const useSessionStore = create<SessionState>()(
         set((s) => {
           const list = s.sessions[date];
           if (!list) return s;
-          const color =
-            input.color ?? suggestColor(useSubjectStore.getState().subjects);
           return {
             sessions: {
               ...s.sessions,
               // editing the start time can move the row, so re-sort
               [date]: byStartTime(
-                list.map((x) =>
-                  x.id === id
-                    ? {
-                        ...x,
-                        subject: input.subject,
-                        topic: input.topic,
-                        time: input.time,
-                        duration: input.duration,
-                        color,
-                        updatedAt: Date.now(),
-                      }
-                    : x,
-                ),
+                list.map((x) => {
+                  if (x.id !== id) return x;
+                  const kind: SessionKind =
+                    input.kind ?? (x.kind === 'break' ? 'break' : 'study');
+                  const isBreakRow = kind === 'break';
+                  const color =
+                    input.color ??
+                    (isBreakRow
+                      ? BREAK_COLOR
+                      : suggestColor(useSubjectStore.getState().subjects));
+                  const next: Session = {
+                    ...x,
+                    subject: isBreakRow ? '' : input.subject,
+                    topic: input.topic,
+                    time: input.time,
+                    duration: input.duration,
+                    color,
+                    updatedAt: Date.now(),
+                  };
+                  if (isBreakRow) next.kind = 'break';
+                  else delete next.kind;
+                  return next;
+                }),
               ),
             },
           };
