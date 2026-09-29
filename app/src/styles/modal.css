@@ -174,7 +174,7 @@
   color: var(--accent);
 }
 .popup-actions .pa-del:hover {
-  background: #fef2f0;
+  background: var(--red-soft);
 }
 .popup-actions button:active {
   transform: scale(0.97);
@@ -390,7 +390,7 @@
 }
 .settings-label input:focus {
   border-color: var(--accent);
-  background: #fff;
+  background: var(--surface);
 }
 .settings-label small {
   font-size: 0.7rem;
@@ -446,11 +446,11 @@
   background: var(--border);
 }
 .settings-btn-primary {
-  background: var(--text);
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
 }
 .settings-btn-primary:hover {
-  background: #2a2622;
+  background: var(--inverse-hover);
 }
 .settings-disconnect {
   background: none;
@@ -518,11 +518,11 @@
   color: var(--text);
 }
 .popup-actions .pa-save {
-  background: var(--text);
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
 }
 .popup-actions .pa-save:hover {
-  background: #2a2622;
+  background: var(--inverse-hover);
 }
 .popup-actions .pa-cancel {
   background: var(--bg);
@@ -1190,4 +1190,88 @@
   padding: 0.55rem;
   z-index: 50;
   box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.18);
+}
+
+/* ------- theme tab ------- */
+.theme-options {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.3rem;
+}
+.theme-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text-3);
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    color 0.2s;
+}
+.theme-option:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.theme-option.active {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.theme-option-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.theme-option-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+[data-theme='dark'] .theme-option.active {
+  background: var(--surface);
+}
+
+/* ------- dark overrides for status colors (light palette doesn't read) ------- */
+[data-theme='dark'] .sync-pill[data-state='synced'],
+[data-theme='dark'] .sync-reload-btn[data-state='synced'] {
+  color: var(--green-dark);
+  border-color: rgba(0, 230, 118, 0.3);
+  background: var(--green-soft);
+}
+[data-theme='dark'] .sync-pill[data-state='synced'] .sync-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 2px rgba(0, 230, 118, 0.25);
+}
+[data-theme='dark'] .sync-pill[data-state='syncing'],
+[data-theme='dark'] .sync-reload-btn[data-state='syncing'],
+[data-theme='dark'] .sync-reload-btn[data-origin='cache'] {
+  color: var(--amber);
+  border-color: rgba(245, 158, 11, 0.35);
+  background: var(--amber-soft);
+}
+[data-theme='dark'] .sync-pill[data-state='syncing'] .sync-dot {
+  background: var(--amber);
+}
+[data-theme='dark'] .sync-pill[data-state='error'],
+[data-theme='dark'] .sync-reload-btn[data-state='error'] {
+  color: var(--accent);
+  border-color: rgba(255, 90, 60, 0.4);
+  background: var(--red-soft);
+}
+[data-theme='dark'] .sync-pill[data-state='error'] .sync-dot {
+  background: var(--accent);
+}
+[data-theme='dark'] .sync-pill[data-state='offline'] .sync-dot {
+  background: var(--text-4);
+}
+[data-theme='dark'] .settings-status.ok {
+  color: var(--green-dark);
 }

@@ -9,7 +9,7 @@ import { ColorMenu } from '@/components/ColorMenu';
 import { kvClient } from '../sync/kvClient';
 
 type Status = { kind: 'idle' | 'ok' | 'err'; text: string };
-type Tab = 'cloud' | 'subjects' | 'quote';
+type Tab = 'cloud' | 'subjects' | 'quote' | 'theme';
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('cloud');
@@ -78,11 +78,20 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               >
                 quote
               </button>
+              <button
+                role="tab"
+                aria-selected={tab === 'theme'}
+                className={'settings-tab' + (tab === 'theme' ? ' active' : '')}
+                onClick={() => setTab('theme')}
+              >
+                theme
+              </button>
             </div>
 
             {tab === 'cloud' && <CloudTab onClose={onClose} />}
             {tab === 'subjects' && <SubjectsTab />}
             {tab === 'quote' && <QuoteTab />}
+            {tab === 'theme' && <ThemeTab />}
           </motion.div>
         </motion.div>
       )}
@@ -377,6 +386,47 @@ function SubjectRow({
         ✕
       </button>
     </li>
+  );
+}
+
+// ─────── theme tab ───────
+
+function ThemeTab() {
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+
+  return (
+    <div className="settings-body">
+      <p className="settings-intro">
+        switch between the light and dark appearance. the choice is stored on this
+        device and applied instantly to the whole plan.
+      </p>
+
+      <div className="theme-options" role="radiogroup" aria-label="appearance">
+        <motion.button
+          type="button"
+          role="radio"
+          aria-checked={theme === 'light'}
+          layout
+          className={'theme-option' + (theme === 'light' ? ' active' : '')}
+          onClick={() => setTheme('light')}
+        >
+          <span className="theme-option-icon" aria-hidden>☀</span>
+          <span className="theme-option-label">light</span>
+        </motion.button>
+        <motion.button
+          type="button"
+          role="radio"
+          aria-checked={theme === 'dark'}
+          layout
+          className={'theme-option' + (theme === 'dark' ? ' active' : '')}
+          onClick={() => setTheme('dark')}
+        >
+          <span className="theme-option-icon" aria-hidden>☾</span>
+          <span className="theme-option-label">dark</span>
+        </motion.button>
+      </div>
+    </div>
   );
 }
 

@@ -14,14 +14,15 @@
   text-align: center;
   transition: all 0.2s;
   position: relative;
+  color: var(--text);
 }
 .day-chip:hover {
   border-color: var(--border-strong);
 }
 .day-chip.active {
-  background: var(--text);
-  border-color: var(--text);
-  color: #fff;
+  background: var(--inverse-bg);
+  border-color: var(--inverse-bg);
+  color: var(--inverse-text);
 }
 .day-chip.today:not(.active) {
   border-color: var(--accent);
@@ -35,7 +36,7 @@
   color: var(--text-3);
 }
 .day-chip.active .dc-name {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--inverse-text-3);
 }
 .day-chip .dc-num {
   font-family: 'Bricolage Grotesque', sans-serif;
@@ -59,7 +60,7 @@
   transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .day-chip.active .dc-bar {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--inverse-tint);
 }
 /* day rating badge: tiny number in the chip corner (display only — the chip
    click still just selects the day) */
@@ -352,7 +353,7 @@
   justify-content: center;
 }
 .s-del:hover {
-  background: #fef2f0;
+  background: var(--red-soft);
   color: var(--accent);
 }
 
@@ -466,8 +467,8 @@
 .submit-btn {
   height: 38px;
   padding: 0 1.2rem;
-  background: var(--text);
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
   border: none;
   border-radius: 10px;
   font-family: inherit;
@@ -481,7 +482,7 @@
   letter-spacing: -0.005em;
 }
 .submit-btn:hover {
-  background: #2a2622;
+  background: var(--inverse-hover);
 }
 .submit-btn:active {
   transform: scale(0.97);
@@ -566,7 +567,7 @@
   letter-spacing: 0.1em;
   color: var(--accent);
   text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface);
   padding: 0.25rem 0.55rem 0.25rem 0.5rem;
   border-radius: 6px;
   flex-shrink: 0;
@@ -620,7 +621,7 @@
   height: 30px;
   border-radius: 50%;
   border: 1.5px solid rgba(255, 90, 60, 0.45);
-  background: #fff;
+  background: var(--surface);
   color: var(--accent);
   cursor: pointer;
   display: flex;
@@ -681,7 +682,7 @@
   height: 30px;
   border-radius: 50%;
   border: 1.5px solid var(--border-strong);
-  background: #fff;
+  background: var(--surface);
   color: var(--text-3);
   cursor: pointer;
   display: flex;

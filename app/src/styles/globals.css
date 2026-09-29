@@ -1,5 +1,6 @@
 /* ─────── design tokens ─────── */
 :root {
+  color-scheme: light;
   --bg: #f7f5f0;
   --surface: #ffffff;
   --surface-2: #fbfaf6;
@@ -26,6 +27,51 @@
   --radius: 16px;
   --radius-lg: 22px;
   --hour-h: 60px;
+  /* "inverse" = surfaces that intentionally contrast the page (primary
+     buttons, featured cards, the active day chip). Tokens keep these
+     readable in both themes instead of hardcoding a dark fill + white text. */
+  --inverse-bg: #181715;
+  --inverse-text: #ffffff;
+  --inverse-text-2: rgba(255, 255, 255, 0.7);
+  --inverse-text-3: rgba(255, 255, 255, 0.6);
+  --inverse-tint: rgba(255, 255, 255, 0.15);
+  --inverse-tint-2: rgba(255, 255, 255, 0.1);
+  --inverse-hover: #2a2622;
+}
+
+/* ─────── dark theme tokens ─────── */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #131211;
+  --surface: #1d1c19;
+  --surface-2: #232220;
+  --border: #302e29;
+  --border-strong: #45423b;
+  --text: #f4f2ec;
+  --text-2: #ccc7bd;
+  --text-3: #9a948a;
+  --text-4: #6f6a61;
+  --accent: #ff6a4d;
+  --accent-soft: #2e1811;
+  --green: #00e676;
+  --green-dark: #22c46a;
+  --green-soft: #0f2a1b;
+  --red: #ff4d5e;
+  --red-dark: #ff6b78;
+  --red-soft: #2e1419;
+  --amber: #f5a623;
+  --amber-soft: #2c210c;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.55), 0 2px 4px -1px rgba(0, 0, 0, 0.40);
+  --shadow-lg: 0 12px 32px -8px rgba(0, 0, 0, 0.70), 0 4px 8px -2px rgba(0, 0, 0, 0.45);
+  /* inverse flips to a light surface with dark text so it still contrasts */
+  --inverse-bg: #f4f2ec;
+  --inverse-text: #181715;
+  --inverse-text-2: rgba(24, 23, 21, 0.8);
+  --inverse-text-3: rgba(24, 23, 21, 0.72);
+  --inverse-tint: rgba(24, 23, 21, 0.12);
+  --inverse-tint-2: rgba(24, 23, 21, 0.08);
+  --inverse-hover: #ffffff;
 }
 
 /* ─────── reset + typography ─────── */
@@ -50,4 +96,10 @@ body {
   background-image:
     radial-gradient(circle at 15% 0%, rgba(255, 90, 60, 0.05), transparent 40%),
     radial-gradient(circle at 85% 100%, rgba(255, 90, 60, 0.03), transparent 40%);
+}
+
+[data-theme='dark'] body {
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(255, 106, 77, 0.08), transparent 40%),
+    radial-gradient(circle at 85% 100%, rgba(255, 106, 77, 0.05), transparent 40%);
 }

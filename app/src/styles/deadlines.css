@@ -88,8 +88,8 @@
   text-decoration-thickness: 1.5px;
 }
 .dl.overdue:not(.done) {
-  border-color: #f4c7c2;
-  background: #fff5f3;
+  border-color: var(--red);
+  background: var(--red-soft);
 }
 .dl .dl-check {
   width: 20px;
@@ -189,7 +189,7 @@
   font-weight: 600;
 }
 .dl .dl-meta .overdue-tag {
-  color: #c1372b;
+  color: var(--red);
   font-weight: 600;
 }
 .dl .dl-del {
@@ -207,7 +207,7 @@
   transition: all 0.2s;
 }
 .dl .dl-del:hover {
-  background: #fef2f0;
+  background: var(--red-soft);
   color: var(--accent);
 }
 
