@@ -45,6 +45,13 @@ import {
 } from "./notes.js";
 import { getQuote, putQuote } from "./quote.js";
 import { getAll } from "./all.js";
+import {
+  getDigestConfig,
+  putDigestConfig,
+  sendTestDigest,
+  previewDigest,
+  runDigest,
+} from "./digest.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -215,6 +222,33 @@ export default {
       return getAll(env, cors, since);
     }
 
+    if (path === "/api/digest/config") {
+      if (request.method === "GET") return getDigestConfig(env, cors);
+      if (request.method === "PUT") {
+        const { body, error } = await readJsonBody(request, cors);
+        if (error) return error;
+        return putDigestConfig(body, env, cors);
+      }
+      return errResponse(405, "Method not allowed", cors);
+    }
+
+    if (path === "/api/digest/test") {
+      if (request.method !== "POST") return errResponse(405, "Method not allowed", cors);
+      return sendTestDigest(env, cors);
+    }
+
+    if (path === "/api/digest/preview") {
+      if (request.method !== "GET") return errResponse(405, "Method not allowed", cors);
+      return previewDigest(env, cors);
+    }
+
     return errResponse(404, "Not found", cors);
+  },
+
+  // Cron trigger (wrangler.jsonc triggers.crons). Hourly tick; the send gate
+  // inside runDigest decides whether the configured hour was reached and the
+  // digest for the local date is still un-sent.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runDigest(env));
   },
 };

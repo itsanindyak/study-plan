@@ -3,11 +3,19 @@
   "name": "study-plan",
   "main": "src/index.js",
   "compatibility_date": "2026-01-01",
+  // Required for the digest mailer: without this flag, fetch() to another
+  // Worker on the same *.workers.dev zone is blocked (error 1042).
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": {
     "enabled": true
   },
   "vars": {
-    "ALLOWED_ORIGINS": "https://study.anindya.online,http://localhost:5173,http://127.0.0.1:5173"
+    "ALLOWED_ORIGINS": "https://study.anindya.online,http://localhost:5173,http://127.0.0.1:5173",
+    "AGENT_MCP_URL": "https://mail-agent.iankoley04.workers.dev/mcp",
+    "MAIL_TO": "iankoley04@gmail.com"
+  },
+  "triggers": {
+    "crons": ["30 * * * *"]
   },
   "kv_namespaces": [
     {

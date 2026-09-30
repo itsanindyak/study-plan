@@ -1,9 +1,17 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDeadlineStore } from '@/store/useDeadlineStore';
+import { useDigestStore } from '@/store/useDigestStore';
 import { DeadlineCard } from './DeadlineCard';
+import { DigestTimeModal } from './DigestTimeModal';
 
 export function DeadlinesView() {
   const deadlines = useDeadlineStore((s) => s.deadlines);
+  const loadDigest = useDigestStore((s) => s.load);
+  const [digestOpen, setDigestOpen] = useState(false);
+
+  useEffect(() => {
+    void loadDigest();
+  }, [loadDigest]);
 
   // the persistent list is the *active* board — resolved deadlines (done or
   // notdone) leave it and surface contextually on their day instead.
@@ -34,18 +42,19 @@ export function DeadlinesView() {
         ) : (
           pending.map((d, idx) => (
             <div key={d.id} style={{ animationDelay: `${idx * 0.04}s` }}>
-              <DeadlineCard deadline={d} origIdx={idx} />
+              <DeadlineCard deadline={d} origIdx={idx} onOpenDigest={() => setDigestOpen(true)} />
             </div>
           ))
         )}
       </div>
 
       <DeadlineForm />
+      {digestOpen && <DigestTimeModal onClose={() => setDigestOpen(false)} />}
     </div>
   );
 }
 
-import { useState, type FormEvent } from 'react';
+import type { FormEvent } from 'react';
 import { useDeadlineStore as useDS } from '@/store/useDeadlineStore';
 import { todayKey } from '@/lib/date';
 

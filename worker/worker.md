@@ -249,6 +249,31 @@ metadata the next time they're saved.
 
 ---
 
+### Daily digest email — the morning deadline summary
+
+A cron trigger (`triggers.crons`, hourly tick) sends one email per day at a
+user-configured hour: pending deadlines with urgency labels (overdue / today /
+tomorrow / in N days) plus today's sessions. Delivery goes through the mail
+agent's MCP `/mcp` route (`send_email` tool) — the worker builds the HTML and
+plain-text bodies and posts a JSON-RPC `tools/call`.
+
+**KV keys:** `digest:config` → `{ time, enabled, tzOffsetMinutes }`, `digest:lastSent` → `"YYYY-MM-DD"`.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/digest/config` | — | `{ time, enabled, tzOffsetMinutes, updatedAt }` |
+| PUT | `/api/digest/config` | any of `{ time, enabled, tzOffsetMinutes }` | `{ ok, config }` |
+| POST | `/api/digest/test` | — | `{ ok, subject, stats }` (sends now, skips all gates) |
+| GET | `/api/digest/preview` | — | the email as **HTML** (`text/html`) — open in a browser |
+
+- `time` is whole hours only: `"HH:00"` (00–23).
+- `tzOffsetMinutes` is minutes east of UTC (default `330` = IST). The "today"
+  used for sessions and days-left math is computed in this offset.
+- Send gate per tick: `enabled` → current hour (in `tzOffsetMinutes`) ≥ configured hour
+  → `digest:lastSent` is not today. A missed tick self-heals on the next one.
+
+---
+
 ### `GET /api/all` — the whole plan in one request
 
 ```http
@@ -421,7 +446,7 @@ Expected: 200s and `{"ok":true}` or the data you PUT. The `-sS` flag silences th
 You don't need to read the worker source to call it. Just:
 
 - **Auth header on every request:** `Authorization: Bearer <user's token>`
-- **17 endpoints** in the five tables above
+- **21 endpoints** in the six tables above
 - **A full pull is one request** — `GET /api/all` (one `list`, no version check,
   no polling; the client pulls on open/tab-focus and via the notes refresh button)
 - **Seven data shapes:** `Session`, `Deadline`, `Subject`, `Note`, `AllSnapshot`, `DateList`, `SessionAll`

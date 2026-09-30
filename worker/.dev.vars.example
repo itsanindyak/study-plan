@@ -3,3 +3,6 @@
 # For production, use `wrangler secret put SECRET_TOKEN`.
 #
 # SECRET_TOKEN=pick-a-long-random-string-here
+#
+# Bearer token the mail-agent /mcp route validates (same value as its MCP_AUTH_TOKEN).
+# AGENT_MCP_TOKEN=your-mcp-auth-token-here

@@ -6,6 +6,7 @@ import type {
   CloudConfig,
   DateKey,
   Deadline,
+  DigestConfig,
   Note,
   Quote,
   RatingEntry,
@@ -229,6 +230,41 @@ export const kvClient = {
       removedDates?: string[];
       updatedAt: number;
     }>(cfg, path);
+  },
+
+  // ── daily digest email ──
+
+  async getDigestConfig(cfg: CloudConfig): Promise<DigestConfig | null> {
+    return request<DigestConfig>(cfg, '/api/digest/config');
+  },
+
+  async putDigestConfig(
+    cfg: CloudConfig,
+    patch: Partial<DigestConfig>,
+  ): Promise<DigestConfig | null> {
+    const res = await request<{ ok: boolean; config: DigestConfig }>(cfg, '/api/digest/config', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+    return res?.config ?? null;
+  },
+
+  async sendDigestTest(cfg: CloudConfig): Promise<{ subject: string } | null> {
+    return request<{ subject: string }>(cfg, '/api/digest/test', { method: 'POST' });
+  },
+
+  // Raw HTML preview of the digest email — opened in a blob URL, so this one
+  // needs text rather than JSON.
+  async getDigestPreview(cfg: CloudConfig): Promise<string> {
+    const res = await fetch(cfg.workerUrl + '/api/digest/preview', {
+      cache: 'no-store',
+      headers: { Authorization: 'Bearer ' + cfg.token },
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new HttpError(res.status, txt);
+    }
+    return res.text();
   },
 };
 

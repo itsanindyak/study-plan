@@ -6,10 +6,11 @@ import { useSessionStore } from '@/store/useSessionStore';
 import { useQuoteStore } from '@/store/useQuoteStore';
 import { normalize as normalizeName, suggestColor } from '@/lib/subjects';
 import { ColorMenu } from '@/components/ColorMenu';
+import { DigestControls } from '@/features/deadlines/DigestControls';
 import { kvClient } from '../sync/kvClient';
 
 type Status = { kind: 'idle' | 'ok' | 'err'; text: string };
-type Tab = 'cloud' | 'subjects' | 'quote' | 'theme';
+type Tab = 'cloud' | 'digest' | 'subjects' | 'quote' | 'theme';
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('cloud');
@@ -64,6 +65,14 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               </button>
               <button
                 role="tab"
+                aria-selected={tab === 'digest'}
+                className={'settings-tab' + (tab === 'digest' ? ' active' : '')}
+                onClick={() => setTab('digest')}
+              >
+                digest email
+              </button>
+              <button
+                role="tab"
                 aria-selected={tab === 'subjects'}
                 className={'settings-tab' + (tab === 'subjects' ? ' active' : '')}
                 onClick={() => setTab('subjects')}
@@ -89,6 +98,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             </div>
 
             {tab === 'cloud' && <CloudTab onClose={onClose} />}
+            {tab === 'digest' && <DigestTab />}
             {tab === 'subjects' && <SubjectsTab />}
             {tab === 'quote' && <QuoteTab />}
             {tab === 'theme' && <ThemeTab />}
@@ -104,6 +114,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
 function CloudTab({ onClose }: { onClose: () => void }) {
   const token = useSettingsStore((s) => s.token);
   const setToken = useSettingsStore((s) => s.setToken);
+  const setVerified = useSettingsStore((s) => s.setVerified);
   const clear = useSettingsStore((s) => s.clear);
   const configured = useSettingsStore(selectIsConfigured);
 
@@ -111,10 +122,8 @@ function CloudTab({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<Status>({ kind: 'idle', text: '' });
   const [busy, setBusy] = useState(false);
 
-  const cfg = () => ({
-    token: useSettingsStore.getState().token,
-    workerUrl: useSettingsStore.getState().workerUrl,
-  });
+  const pingWith = (t: string) =>
+    kvClient.ping({ token: t.trim(), workerUrl: useSettingsStore.getState().workerUrl });
 
   const test = async () => {
     if (!draft.trim()) {
@@ -123,19 +132,18 @@ function CloudTab({ onClose }: { onClose: () => void }) {
     }
     setStatus({ kind: 'idle', text: 'testing…' });
     setBusy(true);
-    const saved = cfg().token;
-    setToken(draft);
     try {
-      const res = await kvClient.ping(cfg());
+      const res = await pingWith(draft);
       if (!res || !res.ok) {
         throw new Error('invalid response from server (is the Worker URL correct?)');
       }
       setStatus({ kind: 'ok', text: 'connection works ✓' });
+      // only flips verification when the draft IS the saved token
+      if (draft.trim() === useSettingsStore.getState().token) setVerified(true);
     } catch (err) {
       setStatus({ kind: 'err', text: 'failed: ' + (err as Error).message });
+      if (draft.trim() === useSettingsStore.getState().token) setVerified(false);
     } finally {
-      if (!configured) setToken(saved);
-      else useSettingsStore.setState({ token: saved });
       setBusy(false);
     }
   };
@@ -145,11 +153,16 @@ function CloudTab({ onClose }: { onClose: () => void }) {
       setStatus({ kind: 'err', text: 'paste your access token first' });
       return;
     }
-    setStatus({ kind: 'idle', text: 'connecting…' });
+    setStatus({ kind: 'idle', text: 'verifying token…' });
     setBusy(true);
-    setToken(draft);
     try {
-      await new Promise((r) => setTimeout(r, 200));
+      // a bad token is never saved — verify before connecting
+      const res = await pingWith(draft);
+      if (!res || !res.ok) {
+        throw new Error('token rejected by the worker — not saved');
+      }
+      setToken(draft);
+      setVerified(true);
       setStatus({ kind: 'ok', text: 'connected ✓' });
       setTimeout(onClose, 700);
     } catch (err) {
@@ -212,6 +225,12 @@ function CloudTab({ onClose }: { onClose: () => void }) {
       )}
     </div>
   );
+}
+
+// ─────── digest email tab ───────
+
+function DigestTab() {
+  return <DigestControls />;
 }
 
 // ─────── subjects tab ───────

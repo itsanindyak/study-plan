@@ -73,3 +73,10 @@ export interface CloudConfig {
   token: string;
   workerUrl: string;
 }
+
+export interface DigestConfig {
+  time: string;
+  enabled: boolean;
+  tzOffsetMinutes: number;
+  updatedAt?: number;
+}

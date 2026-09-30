@@ -210,6 +210,30 @@
   background: var(--red-soft);
   color: var(--accent);
 }
+.dl .dl-alarm {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  color: var(--text-4);
+  cursor: pointer;
+  height: 28px;
+  padding: 0 0.45rem;
+  border-radius: 7px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  transition: all 0.2s;
+}
+.dl .dl-alarm:hover {
+  background: var(--bg);
+  color: var(--accent);
+}
+.dl .dl-alarm.off {
+  opacity: 0.55;
+}
 
 /* ─────── deadline form ─────── */
 .deadline-form {

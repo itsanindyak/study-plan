@@ -12,17 +12,22 @@ import {
   errResponse,
 } from "./shared.js";
 
-// GET /api/deadlines  →  { items: [...], updatedAt }
-export async function listDeadlines(env, cors) {
+// Shared read helper — used by the HTTP route and the digest mailer.
+export async function fetchDeadlines(env) {
   const keys = await listAllKeys(env, DEADLINE_PREFIX);
   const values = await Promise.all(
     keys.map((k) => env.STUDY_KV.get(k.name, { type: "json" }))
   );
-  const items = values
+  return values
     .filter((v) => v != null)
     .map(normalizeRecord)
     .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
-  console.log(`listDeadlines: ${items.length} of ${keys.length} keys`);
+}
+
+// GET /api/deadlines  →  { items: [...], updatedAt }
+export async function listDeadlines(env, cors) {
+  const items = await fetchDeadlines(env);
+  console.log(`listDeadlines: ${items.length} items`);
   return json({ items, updatedAt: Date.now() }, 200, cors);
 }
 

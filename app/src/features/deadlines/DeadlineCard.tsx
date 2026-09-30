@@ -1,4 +1,5 @@
 import { useDeadlineStore, daysUntil } from '@/store/useDeadlineStore';
+import { useDigestStore } from '@/store/useDigestStore';
 import { nextStatus } from '@/lib/status';
 import type { Deadline } from '@/types';
 
@@ -32,9 +33,18 @@ function formatDue(d: Deadline): { html: string; overdue: boolean } {
   return { html: `<span class="due">in ${days} days</span>`, overdue: false };
 }
 
-export function DeadlineCard({ deadline }: { deadline: Deadline; origIdx?: number }) {
+export function DeadlineCard({
+  deadline,
+  onOpenDigest,
+}: {
+  deadline: Deadline;
+  origIdx?: number;
+  onOpenDigest?: () => void;
+}) {
   const setStatus = useDeadlineStore((s) => s.setStatus);
   const remove = useDeadlineStore((s) => s.remove);
+  const digestTime = useDigestStore((s) => s.config.time);
+  const digestEnabled = useDigestStore((s) => s.config.enabled);
   const { html, overdue } = formatDue(deadline);
 
   const className =
@@ -63,6 +73,32 @@ export function DeadlineCard({ deadline }: { deadline: Deadline; origIdx?: numbe
         <div className="dl-title">{deadline.title}</div>
         <div className="dl-meta" dangerouslySetInnerHTML={{ __html: html }} />
       </div>
+      {onOpenDigest && (
+        <button
+          type="button"
+          className={'dl-alarm' + (digestEnabled ? '' : ' off')}
+          onClick={onOpenDigest}
+          aria-label={`daily digest email settings, currently ${digestEnabled ? 'on' : 'off'} at ${digestTime}`}
+          title={`daily digest email · ${digestEnabled ? digestTime : 'off'}`}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="13" r="8" />
+            <path d="M12 9v4l2.5 2.5" />
+            <path d="M5 3 2 6" />
+            <path d="m22 6-3-3" />
+          </svg>
+          {digestTime}
+        </button>
+      )}
       <button
         type="button"
         className="dl-del"
